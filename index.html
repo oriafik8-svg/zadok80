@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- ספריית QR ליצירת ברקוד בלובי -->
+  <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
 </head>
 <body>
   <!-- שכבת קונפטי חגיגית -->
@@ -15,7 +17,7 @@
 
   <div id="app">
 
-    <!-- ========================= מסך בחירה ========================= -->
+    <!-- ========================= מסך בית ========================= -->
     <section id="screen-home" class="screen active">
       <div class="home-hero">
         <div class="big-80" aria-hidden="true">80</div>
@@ -31,9 +33,24 @@
         </div>
         <p class="home-sub">בחרו כיצד להצטרף לחגיגה</p>
         <div class="home-buttons">
-          <button class="role-btn host" id="btn-goto-host">🖥️ מסך מנחה<small>(מקרן / טלוויזיה)</small></button>
+          <button class="role-btn host" id="btn-goto-host">🖥️ יוצר המשחק / מנחה<small>(מקרן / טלוויזיה)</small></button>
           <button class="role-btn player" id="btn-goto-player">📱 מצטרף כשחקן<small>(בטלפון)</small></button>
         </div>
+      </div>
+    </section>
+
+    <!-- ========================= מסך עורך השאלות ========================= -->
+    <section id="screen-editor" class="screen">
+      <div class="editor-wrap">
+        <div class="editor-header">
+          <div class="big-80 small" aria-hidden="true">80</div>
+          <h2>✏️ עריכת השאלון של סבא צדוק</h2>
+          <p>כתבו שאלות, סמנו את התשובה הנכונה (בעיגול ✓). אפשר להדגיש טקסט עם <b>Ctrl+B</b>.</p>
+        </div>
+        <div id="questions-editor"></div>
+        <button id="btn-add-question" class="cta-btn small ghost">➕ הוסף שאלה</button>
+        <button id="btn-start-editor" class="cta-btn" disabled>▶️ התחל משחק</button>
+        <p id="editor-hint" class="editor-hint">יש למלא לפחות שאלה אחת מלאה (שאלה + 4 תשובות + סימון הנכונה)</p>
       </div>
     </section>
 
@@ -43,16 +60,26 @@
       <!-- לובי מנחה -->
       <div id="host-lobby" class="host-view">
         <h2 class="host-heading">הצטרפו למשחק! 🎈</h2>
-        <div class="pin-box">
-          <span class="pin-label">קוד חדר (PIN)</span>
-          <span class="pin-code" id="host-pin">----</span>
+        <div class="avatar-spinner-container">
+          <div class="spinner-ring"></div>
+          <img src="https://i.ibb.co/6cbrs04g/image.jpg" class="center-photo grandpa-photo" alt="סבא צדוק" />
         </div>
-        <p class="join-hint">היכנסו לאתר, בחרו "מצטרף כשחקן" והזינו את הקוד</p>
+        <div class="lobby-top">
+          <div class="pin-box">
+            <span class="pin-label">קוד חדר (PIN)</span>
+            <span class="pin-code" id="host-pin">----</span>
+          </div>
+          <div class="qr-box-wrap">
+            <div id="qr-box" class="qr-box"></div>
+            <span class="qr-label">סרקו כדי להצטרף 📷</span>
+          </div>
+        </div>
         <div class="players-lobby">
           <div class="players-count"><span id="lobby-count">0</span> שחקנים מחוברים</div>
           <ul id="lobby-players" class="lobby-players"></ul>
         </div>
         <button id="btn-start-game" class="cta-btn" disabled>▶️ התחלת המשחק</button>
+        <p id="lobby-hint" class="editor-hint">צריך לפחות 2 שחקנים כדי להתחיל</p>
       </div>
 
       <!-- שאלה מנחה -->
@@ -106,6 +133,12 @@
         <div class="join-form">
           <input id="input-pin" class="join-input" inputmode="numeric" maxlength="6" placeholder="קוד חדר (PIN)" />
           <input id="input-name" class="join-input" maxlength="16" placeholder="השם שלך" />
+          <div class="avatar-label">בחרו דמות:</div>
+          <div class="avatar-picker" id="avatar-picker">
+            <button type="button" class="avatar-opt" data-av="א">א</button>
+            <button type="button" class="avatar-opt" data-av="ע">ע</button>
+            <button type="button" class="avatar-opt" data-av="ש">ש</button>
+          </div>
           <button id="btn-join" class="cta-btn">🚀 הצטרפות</button>
           <p id="join-error" class="join-error" hidden></p>
         </div>
@@ -113,9 +146,13 @@
 
       <!-- המתנה -->
       <div id="player-wait" class="player-view" hidden>
-        <div class="spinner"></div>
+        <div class="player-avatar-big" id="player-avatar-big">א</div>
         <h2 class="player-heading">מעולה, <span id="player-name-echo"></span>! 🎈</h2>
         <p class="player-wait-text">אתם בפנים. מחכים שהמנחה יתחיל...</p>
+        <div class="avatar-spinner-container">
+          <div class="spinner-ring"></div>
+          <img src="https://i.ibb.co/6cbrs04g/image.jpg" class="center-photo grandpa-photo" alt="סבא צדוק" />
+        </div>
       </div>
 
       <!-- כפתורי תשובה -->
