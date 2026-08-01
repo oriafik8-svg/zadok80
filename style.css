@@ -17,6 +17,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* חשוב: מבטיח שכל אלמנט עם התכונה hidden באמת יוסתר
+   (מתגבר על display:flex של קונטיינרים כמו transition-overlay / profile-view / player-view) */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
