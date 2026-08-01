@@ -41,7 +41,7 @@ const DEFAULT_TIME = 20;
    • אפשר קישור אינטרנטי (URL) או שם קובץ מקומי שהעליתם ל-GitHub,
      למשל: "grandpa.jpg"
    ============================================================ */
-const GRANDPA_PHOTO = "https://i.ibb.co/6cbrs04g/image.jpg";
+const GRANDPA_PHOTO = "zadok.jpg";
 
 /* השאלות שבהן ישוחק המשחק בפועל – מתמלאות מהעורך */
 let GAME_QUESTIONS = [];
