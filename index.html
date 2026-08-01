@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>קהוט חוגגים 80 לסבא צדוק! 🎉</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- שכבת קונפטי חגיגית -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <div id="app">
+
+    <!-- ========================= מסך בחירה ========================= -->
+    <section id="screen-home" class="screen active">
+      <div class="home-hero">
+        <div class="big-80" aria-hidden="true">80</div>
+        <h1 class="home-title">קהוט חוגגים <span>80 שנה</span> לסבא צדוק!</h1>
+        <div class="robot" title="הרובוט של המפעל">
+          <div class="robot-antenna"></div>
+          <div class="robot-head">
+            <div class="robot-eye"></div>
+            <div class="robot-eye"></div>
+            <div class="robot-mouth"></div>
+          </div>
+          <div class="robot-body"><span>80</span></div>
+        </div>
+        <p class="home-sub">בחרו כיצד להצטרף לחגיגה</p>
+        <div class="home-buttons">
+          <button class="role-btn host" id="btn-goto-host">🖥️ מסך מנחה<small>(מקרן / טלוויזיה)</small></button>
+          <button class="role-btn player" id="btn-goto-player">📱 מצטרף כשחקן<small>(בטלפון)</small></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================= מסך מנחה ========================= -->
+    <section id="screen-host" class="screen">
+
+      <!-- לובי מנחה -->
+      <div id="host-lobby" class="host-view">
+        <h2 class="host-heading">הצטרפו למשחק! 🎈</h2>
+        <div class="pin-box">
+          <span class="pin-label">קוד חדר (PIN)</span>
+          <span class="pin-code" id="host-pin">----</span>
+        </div>
+        <p class="join-hint">היכנסו לאתר, בחרו "מצטרף כשחקן" והזינו את הקוד</p>
+        <div class="players-lobby">
+          <div class="players-count"><span id="lobby-count">0</span> שחקנים מחוברים</div>
+          <ul id="lobby-players" class="lobby-players"></ul>
+        </div>
+        <button id="btn-start-game" class="cta-btn" disabled>▶️ התחלת המשחק</button>
+      </div>
+
+      <!-- שאלה מנחה -->
+      <div id="host-question" class="host-view" hidden>
+        <div class="q-topbar">
+          <div class="q-counter">שאלה <span id="host-qnum">1</span>/<span id="host-qtotal">1</span></div>
+          <div class="timer" id="host-timer">20</div>
+          <div class="answered-count">ענו: <span id="host-answered">0</span>/<span id="host-players-total">0</span></div>
+        </div>
+        <div class="question-board confetti-frame">
+          <h2 id="host-question-text">השאלה תופיע כאן</h2>
+        </div>
+        <div class="answers-grid" id="host-answers"></div>
+        <button id="btn-reveal" class="cta-btn small">⏭️ סיום ותוצאות</button>
+      </div>
+
+      <!-- חשיפת תשובה + גרף -->
+      <div id="host-reveal" class="host-view" hidden>
+        <h2 class="reveal-title">התשובה הנכונה 🎯</h2>
+        <div class="question-board confetti-frame">
+          <h2 id="reveal-question-text"></h2>
+        </div>
+        <div class="answers-bars" id="reveal-bars"></div>
+        <button id="btn-show-leaderboard" class="cta-btn small">🏆 טבלת ניקוד</button>
+      </div>
+
+      <!-- טבלת ניקוד -->
+      <div id="host-leaderboard" class="host-view" hidden>
+        <h2 class="reveal-title">🏆 טבלת המובילים</h2>
+        <ol id="leaderboard-list" class="leaderboard"></ol>
+        <button id="btn-next-question" class="cta-btn">➡️ לשאלה הבאה</button>
+      </div>
+
+      <!-- סיום -->
+      <div id="host-end" class="host-view" hidden>
+        <div class="big-80 small" aria-hidden="true">80</div>
+        <h2 class="reveal-title">🎉 המשחק הסתיים! מזל טוב סבא צדוק! 🎉</h2>
+        <div class="winner-podium" id="winner-podium"></div>
+        <ol id="final-leaderboard" class="leaderboard"></ol>
+        <button id="btn-restart" class="cta-btn">🔄 משחק חדש</button>
+      </div>
+    </section>
+
+    <!-- ========================= מסך שחקן ========================= -->
+    <section id="screen-player" class="screen">
+
+      <!-- התחברות שחקן -->
+      <div id="player-join" class="player-view">
+        <div class="big-80 small" aria-hidden="true">80</div>
+        <h2 class="player-heading">מצטרפים לחגיגה!</h2>
+        <div class="join-form">
+          <input id="input-pin" class="join-input" inputmode="numeric" maxlength="6" placeholder="קוד חדר (PIN)" />
+          <input id="input-name" class="join-input" maxlength="16" placeholder="השם שלך" />
+          <button id="btn-join" class="cta-btn">🚀 הצטרפות</button>
+          <p id="join-error" class="join-error" hidden></p>
+        </div>
+      </div>
+
+      <!-- המתנה -->
+      <div id="player-wait" class="player-view" hidden>
+        <div class="spinner"></div>
+        <h2 class="player-heading">מעולה, <span id="player-name-echo"></span>! 🎈</h2>
+        <p class="player-wait-text">אתם בפנים. מחכים שהמנחה יתחיל...</p>
+      </div>
+
+      <!-- כפתורי תשובה -->
+      <div id="player-answer" class="player-view" hidden>
+        <div class="player-qbar">שאלה <span id="player-qnum">1</span> • בחרו תשובה!</div>
+        <div class="answers-grid player-grid" id="player-answers"></div>
+      </div>
+
+      <!-- נעל תשובה -->
+      <div id="player-locked" class="player-view" hidden>
+        <div class="lock-emoji">🔒</div>
+        <h2 class="player-heading">התשובה נקלטה!</h2>
+        <p class="player-wait-text">מחכים לשאר השחקנים...</p>
+      </div>
+
+      <!-- תוצאת שאלה -->
+      <div id="player-result" class="player-view" hidden>
+        <div id="result-emoji" class="result-emoji">✅</div>
+        <h2 id="result-text" class="player-heading">כל הכבוד!</h2>
+        <div class="result-score">+<span id="result-points">0</span> נקודות</div>
+        <div class="result-rank">מקום <span id="result-rank">-</span> • <span id="result-total-score">0</span> נק' סה"כ</div>
+      </div>
+
+      <!-- סיום שחקן -->
+      <div id="player-end" class="player-view" hidden>
+        <div class="big-80 small" aria-hidden="true">80</div>
+        <h2 class="player-heading">🎉 סיימנו!</h2>
+        <div id="player-final-rank" class="result-rank big"></div>
+        <div class="result-score">סה"כ <span id="player-final-score">0</span> נקודות</div>
+      </div>
+    </section>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
