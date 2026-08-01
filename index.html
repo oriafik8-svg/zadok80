@@ -17,6 +17,7 @@
   <!-- ספריות: QR ליצירה + QR לסריקה -->
   <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
   <canvas id="confetti-canvas"></canvas>
@@ -75,7 +76,11 @@
         <div class="join-form">
           <input id="auth-email" class="join-input" type="email" placeholder="אימייל" />
           <input id="auth-pass" class="join-input" type="password" placeholder="סיסמה (לפחות 6 תווים)" />
-          <button id="btn-email-auth" class="cta-btn">✉️ כניסה / הרשמה</button>
+          <div class="auth-btns">
+            <button id="btn-email-signin" class="cta-btn">🔑 כניסה</button>
+            <button id="btn-email-signup" class="cta-btn ghost">📝 הרשמה</button>
+          </div>
+          <p class="auth-note">נרשמתם קודם עם Google? התחברו דרך כפתור Google למעלה.</p>
           <p id="auth-error" class="join-error" hidden></p>
         </div>
       </div>
@@ -140,13 +145,28 @@
             <span class="qr-label">סרקו כדי להצטרף 📷</span>
           </div>
         </div>
+        <div class="join-link-row">
+          <input id="join-link" class="join-link-input" readonly />
+          <button id="btn-copy-link" class="cta-btn small">📋 העתק קישור הצטרפות</button>
+        </div>
         <div class="votetime-box">
           <label for="vote-time">⏱️ זמן להצבעה: <b id="vote-time-val">60</b> שניות</label>
           <input type="range" id="vote-time" min="10" max="60" step="5" value="60" />
         </div>
         <div class="votetime-box music-box">
-          <label>🎵 שיר רקע (מתנגן במהלך המשחק): <input type="file" id="music-file" accept="audio/*" /></label>
+          <div class="music-head">🎵 מוזיקת רקע (מתנגנת ברצף במהלך המשחק)</div>
+          <div class="music-source-btns">
+            <button id="btn-music-file" class="cta-btn small ghost">💻 בחירה מהמחשב</button>
+            <span class="or-mini">או</span>
+            <button id="btn-music-search" class="cta-btn small ghost">🔎 חיפוש שיר</button>
+            <input type="file" id="music-file" accept="audio/*" multiple hidden />
+          </div>
+          <div class="spotify-row">
+            <button id="btn-spotify-connect" class="cta-btn small">🎧 חבר Spotify (שירים מלאים)</button>
+            <span id="spotify-status" class="spotify-status"></span>
+          </div>
           <label>🔊 עוצמה: <b id="music-vol-val">50</b>% <input type="range" id="music-vol" min="0" max="100" step="5" value="50" /></label>
+          <ol id="music-queue" class="music-queue"></ol>
         </div>
         <div class="players-lobby">
           <div class="players-count"><span id="lobby-count">0</span> שחקנים מחוברים</div>
@@ -318,12 +338,29 @@
     </div>
   </div>
 
+  <!-- ================= חלון חיפוש שירים ================= -->
+  <div id="music-modal" class="modal" hidden>
+    <div class="modal-box music-modal-box">
+      <div class="music-modal-head">
+        <input id="music-search-input" class="join-input" placeholder="חפשו שיר או אמן..." />
+        <button id="music-search-go" class="cta-btn small">🔎</button>
+        <button id="music-modal-close" class="cta-btn small ghost">✖️</button>
+      </div>
+      <div id="music-results" class="music-results">
+        <p class="music-hint">חפשו שיר ולחצו ➕ כדי להוסיף לרשימת ההשמעה</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= הודעת טוסט ================= -->
+  <div id="toast" class="toast" hidden></div>
+
   <!-- ================= ספירת חזרה מטושטשת ================= -->
   <div id="resume-overlay" class="resume-overlay" hidden>
     <div class="countdown-num" id="resume-num">3</div>
     <p class="countdown-text">ממשיכים...</p>
   </div>
 
-  <script type="module" src="app.js?v=4"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>

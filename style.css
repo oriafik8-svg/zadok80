@@ -497,6 +497,9 @@ body.nav-visible #app { padding-top: 60px; }
   color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900;
 }
 .or-sep { opacity: .8; font-weight: 600; margin: 4px 0; }
+.auth-btns { display: flex; gap: 10px; }
+.auth-btns .cta-btn { flex: 1; }
+.auth-note { font-size: 13px; opacity: .8; }
 
 .profile-card {
   background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.25);
@@ -600,8 +603,59 @@ body.nav-visible #app { padding-top: 60px; }
 
 /* ---- תיבת מוזיקה ---- */
 .music-box label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.music-box input[type=file] { font-family: inherit; color: #fff; max-width: 100%; }
 .music-box input[type=range] { flex: 1; accent-color: var(--orange); min-width: 120px; }
+.music-head { font-weight: 800; }
+.music-source-btns { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.or-mini { opacity: .8; font-weight: 700; }
+.spotify-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#btn-spotify-connect { background: #1db954; }
+.spotify-status { font-weight: 700; color: var(--gold); }
+
+/* קישור הצטרפות בלובי */
+.join-link-row { display: flex; gap: 8px; width: 100%; max-width: 460px; flex-wrap: wrap; justify-content: center; }
+.join-link-input {
+  flex: 1; min-width: 180px; font-family: inherit; font-size: 13px; padding: 10px;
+  border-radius: 10px; border: none; background: rgba(255,255,255,.95); color: var(--purple-dark); text-align: left; direction: ltr;
+}
+
+/* טוסט */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--purple-dark); color: #fff; padding: 12px 22px; border-radius: 30px;
+  font-weight: 700; z-index: 70; box-shadow: var(--shadow); animation: fade-in .2s ease;
+}
+
+/* כפתור שיתוף במשחקים שלי */
+.mini-btn.share { background: var(--orange); }
+
+/* רשימת השמעה ממוספרת */
+.music-queue { list-style: none; display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.music-queue li {
+  display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.12);
+  border-radius: 10px; padding: 6px 10px;
+}
+.music-queue .num {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--orange);
+  color: #fff; font-weight: 900; display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.music-queue .qname { flex: 1; text-align: right; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-queue .qdel { border: none; background: var(--red); color: #fff; border-radius: 8px; width: 28px; height: 28px; cursor: pointer; }
+
+/* חלון חיפוש שירים */
+.music-modal-box { max-width: 480px; text-align: right; }
+.music-modal-head { display: flex; gap: 8px; margin-bottom: 12px; }
+.music-modal-head .join-input { flex: 1; padding: 10px; font-size: 16px; }
+.music-results { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.music-hint { opacity: .7; text-align: center; padding: 20px 0; }
+.music-res {
+  display: flex; align-items: center; gap: 10px; background: #f3f0fa; border-radius: 12px; padding: 8px;
+}
+.music-res img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; }
+.music-res .mr-info { flex: 1; overflow: hidden; }
+.music-res .mr-title { font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-res .mr-artist { font-size: 13px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-res .mr-add { border: none; background: var(--green); color: #fff; font-size: 20px; font-weight: 900; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; flex-shrink: 0; }
+.music-res .mr-add.added { background: var(--gold); color: var(--purple-dark); }
 
 /* ---- מודל אישור ---- */
 .modal {

@@ -130,6 +130,27 @@ function resumeCountdown(cb) {
   }, 1000);
 }
 
+/* הודעת טוסט קצרה */
+let toastTimer = null;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600);
+}
+
+/* העתקה ללוח */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e2) {}
+    document.body.removeChild(ta); return true;
+  }
+}
+
+const APP_BASE = () => location.origin + location.pathname;
+
 /* ==========================================================================
    🔐 אימות (AUTH)
    ========================================================================== */
@@ -163,18 +184,37 @@ const Auth = (() => {
 
   async function google() {
     try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-    catch (e) { authErr(e); }
+    catch (e) { showErr(mapErr(e)); }
   }
-  async function email() {
-    const em = $("#auth-email").value.trim(), pw = $("#auth-pass").value;
-    if (!em || pw.length < 6) return authErr({ message: "אימייל וסיסמה (6+ תווים) נדרשים" });
+  const creds = () => ({ em: $("#auth-email").value.trim(), pw: $("#auth-pass").value });
+
+  async function signIn() {
+    const { em, pw } = creds();
+    if (!em || pw.length < 6) return showErr("הזינו אימייל וסיסמה (לפחות 6 תווים)");
     try { await signInWithEmailAndPassword(auth, em, pw); }
-    catch (e1) {
-      try { await createUserWithEmailAndPassword(auth, em, pw); }
-      catch (e2) { authErr(e2); }
-    }
+    catch (e) { showErr(mapErr(e)); }
   }
-  function authErr(e) { const el = $("#auth-error"); el.textContent = "שגיאה: " + (e.message || e); el.hidden = false; }
+  async function signUp() {
+    const { em, pw } = creds();
+    if (!em || pw.length < 6) return showErr("הזינו אימייל וסיסמה (לפחות 6 תווים)");
+    try { await createUserWithEmailAndPassword(auth, em, pw); }
+    catch (e) { showErr(mapErr(e)); }
+  }
+
+  function mapErr(e) {
+    const c = (e && e.code) || "";
+    if (c.includes("email-already-in-use"))
+      return "כבר קיים חשבון עם האימייל הזה. לחצו \"כניסה\" (ואם נרשמתם עם Google – התחברו דרך כפתור Google).";
+    if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found"))
+      return "אימייל או סיסמה שגויים. אם נרשמתם עם Google – התחברו דרך כפתור Google.";
+    if (c.includes("invalid-email")) return "כתובת אימייל לא תקינה.";
+    if (c.includes("weak-password")) return "סיסמה חלשה מדי (לפחות 6 תווים).";
+    if (c.includes("too-many-requests")) return "יותר מדי ניסיונות. נסו שוב עוד רגע.";
+    if (c.includes("popup-closed") || c.includes("cancelled-popup")) return "חלון ההתחברות נסגר. נסו שוב.";
+    if (c.includes("unauthorized-domain")) return "הדומיין לא מאושר ב-Firebase (Authentication → Settings → Authorized domains).";
+    return "שגיאה: " + ((e && e.message) || e);
+  }
+  function showErr(msg) { const el = $("#auth-error"); el.textContent = msg; el.hidden = false; }
 
   function profile() {
     return {
@@ -184,7 +224,9 @@ const Auth = (() => {
   }
 
   $("#btn-google").addEventListener("click", google);
-  $("#btn-email-auth").addEventListener("click", email);
+  $("#btn-email-signin").addEventListener("click", signIn);
+  $("#btn-email-signup").addEventListener("click", signUp);
+  $("#auth-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") signIn(); });
   $("#btn-logout").addEventListener("click", () => signOut(auth));
 
   return { watch, profile };
@@ -224,12 +266,14 @@ const MyGames = (() => {
         <span class="mygame-actions">
           <button class="mini-btn play" title="שחק">▶️</button>
           <button class="mini-btn edit" title="ערוך">✏️</button>
+          <button class="mini-btn share" title="שתף">🔗</button>
           <button class="mini-btn dup" title="שכפל">⧉</button>
           <button class="mini-btn del" title="מחק">🗑️</button>
         </span>`;
       li.querySelector(".mygame-name").addEventListener("click", () => edit(id));
       li.querySelector(".edit").addEventListener("click", () => edit(id));
       li.querySelector(".play").addEventListener("click", () => play(id));
+      li.querySelector(".share").addEventListener("click", () => shareGame(id));
       li.querySelector(".dup").addEventListener("click", () => duplicate(id));
       li.querySelector(".del").addEventListener("click", () => del(id));
       list.appendChild(li);
@@ -270,8 +314,38 @@ const MyGames = (() => {
     await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { name, questions, updatedAt: Date.now() });
   }
 
+  /* מפרסם עותק ציבורי של המשחק ומחזיר את מזהה השיתוף */
+  async function publishShared(name, questions, existingSid) {
+    const sid = existingSid || push(ref(db, "shared")).key;
+    await set(ref(db, "shared/" + sid), { name: name || "משחק", questions: questions || [], createdAt: Date.now() });
+    return sid;
+  }
+
+  /* שיתוף משחק מהפרופיל – יוצר קישור ששומר את המשחק אצל הנמען */
+  async function shareGame(id) {
+    const g = games[id]; if (!g) return;
+    const sid = await publishShared(g.name, g.questions, g.shareId);
+    if (!g.shareId) await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { shareId: sid });
+    const url = APP_BASE() + "?game=" + sid;
+    await copyText(url);
+    toast("הקישור הועתק! שתפו כדי שישמרו את המשחק 🔗");
+  }
+
+  /* ייבוא משחק משותף לפרופיל (עם מניעת כפילויות) */
+  async function importShared(sid) {
+    if (!currentUser || !sid) return;
+    const snap = await get(ref(db, "shared/" + sid));
+    if (!snap.exists()) return;
+    const sg = snap.val();
+    const mine = (await get(ref(db, "users/" + currentUser.uid + "/games"))).val() || {};
+    if (Object.values(mine).some((g) => g.shareId === sid)) return; // כבר קיים
+    const gRef = push(ref(db, "users/" + currentUser.uid + "/games"));
+    await set(gRef, { name: sg.name || "משחק משותף", questions: sg.questions || [], shareId: sid, updatedAt: Date.now() });
+    toast("המשחק נשמר בפרופיל שלך 🎮");
+  }
+
   $("#btn-new-game").addEventListener("click", create);
-  return { load, save };
+  return { load, save, publishShared, importShared };
 })();
 
 /* ==========================================================================
@@ -396,22 +470,132 @@ const Editor = (() => {
 })();
 
 /* ==========================================================================
+   🎧 Spotify (התחברות + Web Playback SDK + חיפוש)  – למנחה עם Premium
+   ========================================================================== */
+const SpotifyMusic = (() => {
+  /* 🔧 הדביקו כאן את ה-Client ID מ-Spotify Developer Dashboard */
+  const CLIENT_ID = "f8395f2788eb4b37916b1e44575c2d0e";
+  const REDIRECT = location.origin + location.pathname.replace(/[^/]*$/, "") + "callback.html";
+  const SCOPES = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state";
+
+  let token = null, player = null, deviceId = null, connected = false, onEnded = null, lastPaused = false;
+
+  const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const randStr = (n) => b64url(crypto.getRandomValues(new Uint8Array(n))).slice(0, n);
+  async function challenge(v) {
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
+    return b64url(new Uint8Array(d));
+  }
+
+  async function login() {
+    if (CLIENT_ID.startsWith("PASTE")) { alert("צריך להדביק Spotify Client ID ב-app.js (משתנה CLIENT_ID)"); return; }
+    const verifier = randStr(64);
+    localStorage.setItem("sp_verifier", verifier);
+    localStorage.setItem("sp_client", CLIENT_ID);
+    localStorage.setItem("sp_redirect", REDIRECT);
+    const ch = await challenge(verifier);
+    const url = "https://accounts.spotify.com/authorize?" + new URLSearchParams({
+      client_id: CLIENT_ID, response_type: "code", redirect_uri: REDIRECT,
+      code_challenge_method: "S256", code_challenge: ch, scope: SCOPES
+    });
+    window.open(url, "spotify_login", "width=480,height=760");
+    window.addEventListener("message", onMsg);
+  }
+
+  function onMsg(e) {
+    if (e.origin !== location.origin || !e.data || !e.data.spotifyToken) return;
+    token = e.data.spotifyToken;
+    window.removeEventListener("message", onMsg);
+    initPlayer();
+  }
+
+  function initPlayer() {
+    if (!window.Spotify || !window.Spotify.Player) { window.onSpotifyWebPlaybackSDKReady = initPlayer; return; }
+    player = new window.Spotify.Player({ name: "zadok80", getOAuthToken: (cb) => cb(token), volume: 0.5 });
+    player.addListener("ready", ({ device_id }) => {
+      deviceId = device_id; connected = true;
+      const s = $("#spotify-status"); if (s) s.textContent = "מחובר ✓";
+      const b = $("#btn-spotify-connect"); if (b) { b.textContent = "🎧 Spotify מחובר"; b.disabled = true; }
+    });
+    player.addListener("initialization_error", () => fail());
+    player.addListener("authentication_error", () => fail());
+    player.addListener("account_error", () => { alert("נדרש חשבון Spotify Premium לניגון שירים מלאים."); });
+    player.addListener("player_state_changed", (st) => {
+      if (!st) return;
+      const ended = st.paused && st.position === 0 && st.track_window &&
+                    st.track_window.previous_tracks && st.track_window.previous_tracks.length > 0;
+      if (ended && !lastPaused) { lastPaused = true; onEnded && onEnded(); }
+      else if (!st.paused) { lastPaused = false; }
+    });
+    player.connect();
+  }
+  function fail() { const s = $("#spotify-status"); if (s) s.textContent = "שגיאת התחברות"; }
+
+  async function api(path, opts) {
+    return fetch("https://api.spotify.com/v1" + path, {
+      ...opts, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", ...(opts && opts.headers) }
+    });
+  }
+  async function search(q) {
+    const r = await api("/search?type=track&limit=25&q=" + encodeURIComponent(q));
+    const d = await r.json();
+    return (d.tracks && d.tracks.items) || [];
+  }
+  async function play(uri) {
+    lastPaused = false;
+    await api("/me/player/play?device_id=" + deviceId, { method: "PUT", body: JSON.stringify({ uris: [uri] }) });
+  }
+  function pause() { if (player) player.pause(); }
+  function setVolume(v) { if (player) player.setVolume(v); }
+
+  const cb = $("#btn-spotify-connect"); if (cb) cb.addEventListener("click", login);
+
+  return { search, play, pause, setVolume, isConnected: () => connected, setOnEnded: (f) => (onEnded = f) };
+})();
+
+/* ==========================================================================
    🖥️ מנחה (HOST)
    ========================================================================== */
 const Host = (() => {
   let pin = null, gameRef = null, players = {}, questions = [];
   let idx = -1, timerId = null, cdTimerId = null, ansUnsub = null, revealing = false, voteTime = DEFAULT_TIME;
   let phase = "lobby";          // lobby | playing | paused | ended
-  let pausedPid = null, pausedName = "";
-  let musicEl = null, musicVol = 0.5;
+  let pausedPid = null, pausedName = "", shareTitle = "";
+  let musicVol = 0.5, playlist = [], musicIdx = 0;
+  const musicEl = new Audio();
+  musicEl.volume = musicVol;
+  musicEl.addEventListener("ended", () => { if (curKind() === "audio") advance(); });
+  SpotifyMusic.setOnEnded(() => { if (curKind() === "spotify") advance(); });
 
-  /* ---------- מוזיקת רקע ---------- */
-  function startMusic() { if (musicEl) { musicEl.currentTime = 0; musicEl.play().catch(() => {}); } }
-  function stopMusic()  { if (musicEl) musicEl.pause(); }
+  const curKind = () => (playlist[musicIdx] ? playlist[musicIdx].kind : null);
+
+  /* ---------- רשימת השמעה (מהמחשב / חיפוש / Spotify) ---------- */
+  function renderQueue() {
+    const ol = $("#music-queue"); ol.innerHTML = "";
+    playlist.forEach((t, i) => {
+      const tag = t.kind === "spotify" ? "🎧" : (t.preview ? "🔈30ש'" : "🎵");
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="num">${i + 1}</span><span class="qname">${tag} ${esc(t.name)}</span><button class="qdel" title="הסר">✕</button>`;
+      li.querySelector(".qdel").addEventListener("click", () => { playlist.splice(i, 1); renderQueue(); });
+      ol.appendChild(li);
+    });
+  }
+  function addTrack(t) { playlist.push(t); renderQueue(); }
+
+  function playCurrent() {
+    const t = playlist[musicIdx]; if (!t) return;
+    if (t.kind === "spotify") { musicEl.pause(); SpotifyMusic.play(t.uri); }
+    else { SpotifyMusic.pause(); musicEl.src = t.src; musicEl.volume = musicVol; musicEl.currentTime = 0; musicEl.play().catch(() => {}); }
+  }
+  function advance() { if (!playlist.length) return; musicIdx = (musicIdx + 1) % playlist.length; playCurrent(); }
+
+  function startMusic() { if (!playlist.length) return; musicIdx = 0; playCurrent(); }
+  function stopMusic() { musicEl.pause(); SpotifyMusic.pause(); }
 
   async function init(qs, title) {
     if (!db) { alert("Firebase לא מוגדר."); return; }
     questions = qs; idx = -1; players = {}; voteTime = DEFAULT_TIME; phase = "lobby"; pausedPid = null;
+    shareTitle = title || "המשחק של סבא צדוק";
     pin = genPin(); gameRef = ref(db, "games/" + pin);
 
     showHostView("host-loading");   // "יוצר חדר..." 3 שניות
@@ -420,12 +604,19 @@ const Host = (() => {
     setTimeout(() => enterLobby(), 3000);
   }
 
-  function enterLobby() {
+  async function enterLobby() {
     $("#host-pin").textContent = pin;
     $("#host-qtotal").textContent = questions.length;
     showHostView("host-lobby");
 
-    const joinUrl = location.origin + location.pathname + "?pin=" + pin;
+    // פרסום עותק ציבורי כדי שהמצטרפים גם יוכלו לשמור את המשחק בפרופיל
+    let joinUrl = APP_BASE() + "?pin=" + pin;
+    try {
+      const sid = await MyGames.publishShared(shareTitle, questions);
+      joinUrl = APP_BASE() + "?pin=" + pin + "&game=" + sid;
+    } catch (e) {}
+    $("#join-link").value = joinUrl;
+
     const qr = $("#qr-box"); qr.innerHTML = "";
     try { new QRCode(qr, { text: joinUrl, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M }); }
     catch (e) { qr.textContent = "QR"; }
@@ -658,19 +849,74 @@ const Host = (() => {
 
   $("#vote-time").addEventListener("input", (e) => { voteTime = Number(e.target.value); $("#vote-time-val").textContent = voteTime; });
 
-  // מוזיקת רקע
-  $("#music-file").addEventListener("change", (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    if (musicEl) musicEl.pause();
-    musicEl = new Audio(URL.createObjectURL(f));
-    musicEl.loop = true; musicEl.volume = musicVol;
-  });
+  // מוזיקת רקע – עוצמה
   $("#music-vol").addEventListener("input", (e) => {
     musicVol = Number(e.target.value) / 100;
     $("#music-vol-val").textContent = e.target.value;
-    if (musicEl) musicEl.volume = musicVol;
+    musicEl.volume = musicVol; SpotifyMusic.setVolume(musicVol);
   });
 
+  // בחירה מהמחשב (ריבוי קבצים, שירים מלאים)
+  $("#btn-music-file").addEventListener("click", () => $("#music-file").click());
+  $("#music-file").addEventListener("change", (e) => {
+    [...e.target.files].forEach((f) => addTrack({ name: f.name.replace(/\.[^.]+$/, ""), kind: "audio", src: URL.createObjectURL(f) }));
+    e.target.value = "";
+  });
+
+  // חיפוש שיר – Spotify אם מחובר (שירים מלאים), אחרת קטלוג ציבורי (קטעי 30 שנ')
+  const addedSet = new Set();
+  const openSearch = () => { $("#music-modal").hidden = false; $("#music-search-input").focus(); };
+  const closeSearch = () => { $("#music-modal").hidden = true; };
+
+  function resultRow(art, title, artist, key, onAdd) {
+    const div = document.createElement("div");
+    div.className = "music-res";
+    div.innerHTML = `<img src="${art || ""}" alt=""><div class="mr-info"><div class="mr-title">${esc(title)}</div>
+      <div class="mr-artist">${esc(artist)}</div></div><button class="mr-add">➕</button>`;
+    const btn = div.querySelector(".mr-add");
+    btn.addEventListener("click", () => {
+      if (addedSet.has(key)) return;
+      addedSet.add(key); onAdd();
+      btn.textContent = "✓"; btn.classList.add("added");
+    });
+    return div;
+  }
+
+  async function runSearch() {
+    const q = $("#music-search-input").value.trim();
+    const box = $("#music-results");
+    if (!q) return;
+    box.innerHTML = `<p class="music-hint">מחפש...</p>`;
+    try {
+      if (SpotifyMusic.isConnected()) {
+        const items = await SpotifyMusic.search(q);
+        if (!items.length) { box.innerHTML = `<p class="music-hint">לא נמצאו תוצאות 😕</p>`; return; }
+        box.innerHTML = "";
+        items.forEach((it) => {
+          const art = it.album && it.album.images && it.album.images.length ? it.album.images[it.album.images.length - 1].url : "";
+          const artist = (it.artists || []).map((a) => a.name).join(", ");
+          box.appendChild(resultRow(art, it.name, artist, it.uri,
+            () => addTrack({ name: `${it.name} – ${artist}`, kind: "spotify", uri: it.uri })));
+        });
+      } else {
+        const r = await fetch("https://itunes.apple.com/search?media=music&limit=25&term=" + encodeURIComponent(q));
+        const data = await r.json();
+        const items = (data.results || []).filter((x) => x.previewUrl);
+        if (!items.length) { box.innerHTML = `<p class="music-hint">לא נמצאו תוצאות 😕</p>`; return; }
+        box.innerHTML = "";
+        items.forEach((it) => {
+          box.appendChild(resultRow(it.artworkUrl100, it.trackName, it.artistName, it.previewUrl,
+            () => addTrack({ name: `${it.trackName} – ${it.artistName}`, kind: "audio", preview: true, src: it.previewUrl })));
+        });
+      }
+    } catch (err) { box.innerHTML = `<p class="music-hint">שגיאת חיפוש. נסו שוב.</p>`; }
+  }
+  $("#btn-music-search").addEventListener("click", openSearch);
+  $("#music-modal-close").addEventListener("click", closeSearch);
+  $("#music-search-go").addEventListener("click", runSearch);
+  $("#music-search-input").addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
+
+  $("#btn-copy-link").addEventListener("click", async () => { await copyText($("#join-link").value); toast("קישור ההצטרפות הועתק! 📋"); });
   $("#btn-start-game").addEventListener("click", () => countdownThenQuestion(0));
   $("#btn-reveal").addEventListener("click", () => endQuestion());
   $("#btn-show-leaderboard").addEventListener("click", () => showLeaderboard());
@@ -879,11 +1125,22 @@ $("#home-join").addEventListener("click", () => requireAuth(() => { Player.prefi
 // עוקף: "ליצור" מפרופיל/נאב פותח את רשימת המשחקים שלי (שם אפשר גם +חדש)
 function goToMyGames() { transitionTo("screen-profile", "המשחקים שלי..."); }
 
-// כניסה דרך QR עם ?pin=
-const pinParam = new URLSearchParams(location.search).get("pin");
+// כניסה דרך קישור: ?pin= (הצטרפות למשחק חי) ו/או ?game= (שמירת משחק בפרופיל)
+const _params = new URLSearchParams(location.search);
+const pinParam = _params.get("pin");
+const gameParam = _params.get("game");
+const hasPin = pinParam && /^\d{4,6}$/.test(pinParam);
 Auth.watch();
-if (pinParam && /^\d{4,6}$/.test(pinParam)) {
-  requireAuth(() => { Player.prefill(); $("#input-pin").value = pinParam; transitionTo("screen-player", "מצטרפים..."); });
+
+if (gameParam || hasPin) {
+  requireAuth(async () => {
+    if (gameParam) await MyGames.importShared(gameParam);   // שומר את המשחק בפרופיל
+    if (hasPin) {                                            // + מצטרף למשחק החי
+      Player.prefill(); $("#input-pin").value = pinParam; transitionTo("screen-player", "מצטרפים...");
+    } else {                                                 // רק שמירה → מסך הפרופיל
+      transitionTo("screen-profile", "שומר את המשחק...");
+    }
+  });
 } else {
   showScreen("screen-home");
 }

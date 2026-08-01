@@ -50,6 +50,10 @@ const firebaseConfig = {
     "games": {
       "$pin": { ".read": true, ".write": true }
     },
+    "shared": {
+      ".read": true,
+      "$sid": { ".write": "auth != null" }
+    },
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
