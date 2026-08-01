@@ -8,7 +8,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#46178f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="zadok80" />
+  <!-- ספריות: QR ליצירה + QR לסריקה -->
   <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <canvas id="confetti-canvas"></canvas>
@@ -136,6 +144,10 @@
           <label for="vote-time">⏱️ זמן להצבעה: <b id="vote-time-val">60</b> שניות</label>
           <input type="range" id="vote-time" min="10" max="60" step="5" value="60" />
         </div>
+        <div class="votetime-box music-box">
+          <label>🎵 שיר רקע (מתנגן במהלך המשחק): <input type="file" id="music-file" accept="audio/*" /></label>
+          <label>🔊 עוצמה: <b id="music-vol-val">50</b>% <input type="range" id="music-vol" min="0" max="100" step="5" value="50" /></label>
+        </div>
         <div class="players-lobby">
           <div class="players-count"><span id="lobby-count">0</span> שחקנים מחוברים</div>
           <ul id="lobby-players" class="lobby-players cards"></ul>
@@ -179,6 +191,26 @@
         <button id="btn-next-question" class="cta-btn">➡️ לשאלה הבאה</button>
       </div>
 
+      <!-- שחקן יצא -->
+      <div id="host-paused" class="host-view" hidden>
+        <div class="lock-emoji">😮</div>
+        <h2 class="host-heading">השחקן <span id="paused-name"></span> יצא מהמשחק</h2>
+        <p class="player-wait-text">המשחק מושהה. מה תרצו לעשות?</p>
+        <button id="btn-continue-without" class="cta-btn">➡️ להמשיך בלעדיו</button>
+        <button id="btn-wait" class="cta-btn small ghost">⏳ לחכות</button>
+      </div>
+
+      <!-- ממתינים שהשחקן יחזור -->
+      <div id="host-waiting" class="host-view" hidden>
+        <div class="avatar-spinner-container">
+          <div class="spinner-ring"></div>
+          <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" class="center-photo grandpa-photo" alt="סבא" />
+        </div>
+        <h2 class="host-heading">מחכים ש-<span id="waiting-name"></span> יחזור...</h2>
+        <button id="btn-kick" class="cta-btn small">🚫 תוציא את <span id="kick-name"></span></button>
+        <button id="btn-end-game" class="cta-btn small ghost">🏁 סיים משחק</button>
+      </div>
+
       <!-- סיום + פודיום -->
       <div id="host-end" class="host-view" hidden>
         <h2 class="reveal-title">🎉 מזל טוב סבא צדוק! 🎉</h2>
@@ -200,6 +232,8 @@
         <h2 class="player-heading">מצטרפים לחגיגה!</h2>
         <div class="join-form">
           <input id="input-pin" class="join-input" inputmode="numeric" maxlength="6" placeholder="קוד חדר (PIN)" />
+          <button id="btn-scan" class="cta-btn small ghost">📷 סרוק ברקוד</button>
+          <div id="qr-reader" hidden></div>
           <input id="input-name" class="join-input" maxlength="16" placeholder="השם שלך" />
           <button id="btn-join" class="cta-btn">🚀 הצטרפות</button>
           <p id="join-error" class="join-error" hidden></p>
@@ -244,17 +278,52 @@
         <div class="result-rank">מקום <span id="result-rank">-</span> • <span id="result-total-score">0</span> נק' סה"כ</div>
       </div>
 
+      <!-- ממתין לשחקן שיצא -->
+      <div id="player-paused" class="player-view" hidden>
+        <div class="avatar-spinner-container">
+          <div class="spinner-ring"></div>
+          <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" class="center-photo grandpa-photo" alt="סבא" />
+        </div>
+        <h2 class="player-heading">מחכים לשחקן <span id="pl-paused-name"></span>...</h2>
+        <p class="player-wait-text">המשחק מושהה לרגע</p>
+      </div>
+
+      <!-- היוצר סיים את המשחק -->
+      <div id="player-aborted" class="player-view" hidden>
+        <div class="lock-emoji">🏁</div>
+        <h2 class="player-heading">היוצר סיים את המשחק</h2>
+        <button id="btn-player-abort-home" class="cta-btn">✖️</button>
+      </div>
+
       <!-- סיום -->
       <div id="player-end" class="player-view" hidden>
         <div class="big-80 small" aria-hidden="true">80</div>
         <h2 class="player-heading">🎉 סיימנו!</h2>
         <div id="player-final-rank" class="result-rank big"></div>
         <div class="result-score">סה"כ <span id="player-final-score">0</span> נקודות</div>
+        <button id="btn-player-next" class="cta-btn">➡️ מסך הבית</button>
       </div>
     </section>
 
   </div>
 
-  <script type="module" src="app.js?v=3"></script>
+  <!-- ================= מודל אישור גנרי ================= -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box">
+      <p id="modal-text"></p>
+      <div class="modal-actions">
+        <button id="modal-yes" class="cta-btn small"></button>
+        <button id="modal-no" class="cta-btn small ghost"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ספירת חזרה מטושטשת ================= -->
+  <div id="resume-overlay" class="resume-overlay" hidden>
+    <div class="countdown-num" id="resume-num">3</div>
+    <p class="countdown-text">ממשיכים...</p>
+  </div>
+
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
