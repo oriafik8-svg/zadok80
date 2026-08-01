@@ -10,6 +10,7 @@
   --purple: #46178f;
   --purple-dark: #2d0e5f;
   --gold:   #ffd23f;
+  --orange: #ff8c00;
   --white:  #ffffff;
   --shadow: 0 6px 0 rgba(0,0,0,.25);
 }
@@ -447,3 +448,150 @@ body {
   .answer-tile { padding: 16px; min-height: 76px; }
   .q-answers { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   ✨ שדרוג zadok80 – רכיבים חדשים
+   ========================================================================== */
+
+/* ---- תפריט ניווט עליון ---- */
+.topnav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  display: none; align-items: center; justify-content: center; gap: 6px;
+  background: rgba(45, 14, 95, .85); backdrop-filter: blur(8px);
+  padding: 8px 10px; box-shadow: 0 3px 12px rgba(0,0,0,.3);
+}
+body.nav-visible .topnav { display: flex; }
+body.nav-visible #app { padding-top: 60px; }
+.nav-btn {
+  position: relative; font-family: inherit; font-size: 16px; font-weight: 700;
+  color: var(--white); background: none; border: none; cursor: pointer;
+  padding: 10px 14px; opacity: .8; transition: opacity .15s;
+}
+.nav-btn:hover { opacity: 1; }
+.nav-btn.active { opacity: 1; }
+.nav-btn.active::after {
+  content: ''; position: absolute; bottom: 2px; left: 12px; right: 12px; height: 4px;
+  background: var(--orange); border-radius: 3px;
+}
+
+/* ---- אוברליי מעבר ---- */
+.transition-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: rgba(45, 14, 95, .95);
+  animation: fade-in .2s ease;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.transition-text { font-size: 22px; font-weight: 800; }
+
+/* ---- מסך פרופיל ---- */
+#screen-profile { flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; overflow-y: auto; }
+.profile-view { width: 100%; max-width: 520px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.google-btn { background: #fff; color: #444; display: inline-flex; align-items: center; gap: 12px; }
+.google-btn .g-icon {
+  width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900;
+}
+.or-sep { opacity: .8; font-weight: 600; margin: 4px 0; }
+
+.profile-card {
+  background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.25);
+  border-radius: 20px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%;
+}
+.profile-photo { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; border: 4px solid var(--gold); }
+.profile-name { font-size: 24px; font-weight: 900; }
+
+.mygames-head { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.mygames-list { list-style: none; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.mygame-item {
+  background: var(--white); color: var(--purple-dark); border-radius: 14px; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; box-shadow: var(--shadow);
+}
+.mygame-name { font-weight: 800; font-size: 18px; flex: 1; text-align: right; cursor: pointer; }
+.mygame-meta { font-size: 13px; opacity: .7; }
+.mygame-actions { display: flex; gap: 6px; }
+.mini-btn {
+  border: none; background: var(--purple); color: #fff; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 10px; font-size: 16px;
+}
+.mini-btn.play { background: var(--green); }
+.mini-btn.del { background: var(--red); }
+
+/* ---- עורך: כותרת + סוגי הוספה ---- */
+.game-title-input {
+  font-family: inherit; font-size: 22px; font-weight: 900; text-align: center;
+  background: rgba(255,255,255,.95); color: var(--purple-dark); border: none;
+  border-radius: 12px; padding: 12px; width: 100%; max-width: 380px;
+}
+.add-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.add-btn {
+  font-family: inherit; font-size: 17px; font-weight: 800; color: #fff; cursor: pointer;
+  border: none; border-radius: 14px; padding: 14px 20px; box-shadow: var(--shadow);
+}
+.add-btn.quad { background: linear-gradient(90deg, var(--red) 0 25%, var(--blue) 0 50%, var(--yellow) 0 75%, var(--green) 0); }
+.add-btn.tf { background: linear-gradient(90deg, var(--red) 0 50%, var(--blue) 0); }
+
+.q-tab-btn {
+  border: 2px solid var(--gold); background: rgba(255,210,63,.2); color: var(--white);
+  font-weight: 800; font-size: 13px; border-radius: 8px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
+.q-type-badge { font-size: 13px; font-weight: 800; color: var(--gold); }
+
+/* ---- לובי: זמן הצבעה + כרטיסי שחקנים ---- */
+.votetime-box {
+  background: rgba(0,0,0,.2); border-radius: 14px; padding: 14px 20px; width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; gap: 8px; font-weight: 700;
+}
+.votetime-box input[type=range] { width: 100%; accent-color: var(--orange); }
+.lobby-players.cards li {
+  background: var(--white); color: var(--purple-dark); border-radius: 12px; padding: 8px 14px;
+  display: flex; align-items: center; gap: 8px; border: none;
+}
+.lobby-players.cards li .pcard-photo {
+  width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 2px solid var(--purple);
+}
+
+/* ---- ספירה לאחור ---- */
+.countdown-view { align-items: center; justify-content: center; gap: 10px; min-height: 60vh; }
+.countdown-num {
+  font-size: clamp(120px, 30vw, 260px); font-weight: 900; line-height: 1;
+  color: var(--gold); text-shadow: 0 6px 0 rgba(0,0,0,.35);
+  animation: cd-pop .9s ease infinite;
+}
+@keyframes cd-pop { 0%{transform:scale(.6);opacity:.3;} 40%{transform:scale(1.1);opacity:1;} 100%{transform:scale(1);opacity:.85;} }
+.countdown-text { font-size: 24px; font-weight: 800; }
+
+/* ---- אווטאר שחקן (תמונה) ---- */
+.player-avatar-photo { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 5px solid var(--gold); box-shadow: var(--shadow); }
+
+/* ---- פודיום דרמטי ---- */
+#host-end { position: relative; }
+.podium {
+  display: flex; align-items: flex-end; justify-content: center; gap: 14px;
+  width: 100%; max-width: 640px; min-height: 340px; margin-top: 10px;
+}
+.podium-col {
+  flex: 1; max-width: 180px; border-radius: 16px 16px 0 0; padding: 14px 8px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  color: var(--purple-dark); font-weight: 900; opacity: 0; transform: translateY(40px);
+  transition: opacity .5s ease, transform .5s ease;
+}
+.podium-col.show { opacity: 1; transform: translateY(0); }
+.podium-col .p-photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; }
+.podium-col .p-name { font-size: 18px; }
+.podium-col .p-score { color: var(--red); font-size: 20px; }
+.podium-col .p-place { font-size: 34px; }
+.place-1 { background: linear-gradient(180deg, var(--gold), #fff3b0); height: 300px; }
+.place-2 { background: linear-gradient(180deg, #d8d8e0, #f4f4f8); height: 230px; }
+.place-3 { background: linear-gradient(180deg, #e0a56a, #f6d3ab); height: 180px; }
+.place-1.winner-glow { box-shadow: 0 0 50px 12px var(--gold); animation: winner-pulse 1.4s ease infinite; }
+@keyframes winner-pulse { 0%,100%{ box-shadow: 0 0 40px 8px var(--gold);} 50%{ box-shadow: 0 0 70px 18px var(--gold);} }
+/* אפקט חושך ופוקוס על המנצח */
+#host-end.spotlight::before {
+  content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: -1; animation: fade-in .6s ease;
+}
+
+/* ---- אווטאר-אות כשאין תמונת פרופיל ---- */
+.ava-letter { display: inline-flex; align-items: center; justify-content: center; background: var(--purple); color: #fff; font-weight: 900; }
+.pcard-photo.ava-letter { width: 30px; height: 30px; border-radius: 50%; font-size: 15px; }
+.p-photo.ava-letter { width: 64px; height: 64px; border-radius: 50%; font-size: 26px; border: 3px solid #fff; }
