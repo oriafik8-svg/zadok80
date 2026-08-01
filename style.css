@@ -595,6 +595,33 @@ body.nav-visible #app { padding-top: 60px; }
   content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: -1; animation: fade-in .6s ease;
 }
 
+/* ---- QR סורק ---- */
+#qr-reader { width: 100%; max-width: 320px; margin: 0 auto; border-radius: 12px; overflow: hidden; }
+
+/* ---- תיבת מוזיקה ---- */
+.music-box label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.music-box input[type=file] { font-family: inherit; color: #fff; max-width: 100%; }
+.music-box input[type=range] { flex: 1; accent-color: var(--orange); min-width: 120px; }
+
+/* ---- מודל אישור ---- */
+.modal {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(4px); animation: fade-in .2s ease; padding: 20px;
+}
+.modal-box {
+  background: var(--white); color: var(--purple-dark); border-radius: 20px; padding: 26px;
+  max-width: 420px; width: 100%; text-align: center; box-shadow: var(--shadow);
+}
+.modal-box p { font-size: 20px; font-weight: 800; margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ---- ספירת חזרה מטושטשת ---- */
+.resume-overlay {
+  position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  background: rgba(45,14,95,.45); backdrop-filter: blur(12px); animation: fade-in .2s ease;
+}
+
 /* ---- אווטאר-אות כשאין תמונת פרופיל ---- */
 .ava-letter { display: inline-flex; align-items: center; justify-content: center; background: var(--purple); color: #fff; font-weight: 900; }
 .pcard-photo.ava-letter { width: 30px; height: 30px; border-radius: 50%; font-size: 15px; }
