@@ -207,6 +207,8 @@ const Auth = (() => {
       return "כבר קיים חשבון עם האימייל הזה. לחצו \"כניסה\" (ואם נרשמתם עם Google – התחברו דרך כפתור Google).";
     if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found"))
       return "אימייל או סיסמה שגויים. אם נרשמתם עם Google – התחברו דרך כפתור Google.";
+    if (c.includes("operation-not-allowed"))
+      return "התחברות עם אימייל/סיסמה לא מופעלת ב-Firebase. הפעילו ב-Authentication → Sign-in method → Email/Password. (בינתיים אפשר להיכנס עם Google)";
     if (c.includes("invalid-email")) return "כתובת אימייל לא תקינה.";
     if (c.includes("weak-password")) return "סיסמה חלשה מדי (לפחות 6 תווים).";
     if (c.includes("too-many-requests")) return "יותר מדי ניסיונות. נסו שוב עוד רגע.";
@@ -324,11 +326,16 @@ const MyGames = (() => {
   /* שיתוף משחק מהפרופיל – יוצר קישור ששומר את המשחק אצל הנמען */
   async function shareGame(id) {
     const g = games[id]; if (!g) return;
-    const sid = await publishShared(g.name, g.questions, g.shareId);
-    if (!g.shareId) await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { shareId: sid });
-    const url = APP_BASE() + "?game=" + sid;
-    await copyText(url);
-    toast("הקישור הועתק! שתפו כדי שישמרו את המשחק 🔗");
+    try {
+      const sid = await publishShared(g.name, g.questions, g.shareId);
+      if (!g.shareId) await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { shareId: sid });
+      const url = APP_BASE() + "?game=" + sid;
+      await copyText(url);
+      toast("הקישור הועתק! שתפו כדי שישמרו את המשחק 🔗");
+    } catch (e) {
+      console.error("share error", e);
+      toast("שגיאת שיתוף. ודאו שהוספתם את חוקי 'shared' ב-Firebase (ראו README).");
+    }
   }
 
   /* ייבוא משחק משותף לפרופיל (עם מניעת כפילויות) */
@@ -367,7 +374,8 @@ const Editor = (() => {
 
   function addBlock(type, data, isFirst) {
     const id = ++seq;
-    const n = type === "tf" ? 2 : 4;
+    const isOpen = type === "open";
+    const n = isOpen ? 0 : (type === "tf" ? 2 : 4);
     const block = document.createElement("div");
     block.className = "q-block"; block.dataset.id = id; block.dataset.type = type;
     const phQ = isFirst ? "מתי סבא נולד?" : "רשמו כאן שאלה...";
@@ -381,15 +389,19 @@ const Editor = (() => {
           <div class="a-text editable" contenteditable="true" data-ph="${ph}"></div>
         </div>`;
     }
+    const badge = isOpen ? "שאלה פתוחה" : (type === "tf" ? "אמת / שקר" : "4 תשובות");
+    const answersHtml = isOpen
+      ? `<div class="q-open-note">✍️ השחקנים יכתבו תשובה חופשית, ואתם תדרגו כל תשובה בזמן אמת. אין טיימר.</div>`
+      : `<div class="q-answers">${rows}</div>`;
     block.innerHTML = `
       <div class="q-block-head">
         <span class="q-index"></span>
-        <span class="q-type-badge">${type === "tf" ? "אמת / שקר" : "4 תשובות"}</span>
+        <span class="q-type-badge">${badge}</span>
         <button type="button" class="q-tab-btn" title="השלם דוגמה (TAB)">TAB</button>
         <button type="button" class="q-remove" title="מחק">🗑️</button>
       </div>
       <div class="q-text editable" contenteditable="true" data-ph="${phQ}"></div>
-      <div class="q-answers">${rows}</div>`;
+      ${answersHtml}`;
     wrap.appendChild(block);
 
     if (data) {
@@ -440,6 +452,7 @@ const Editor = (() => {
     wrap.querySelectorAll(".q-block").forEach(b => {
       const qT = b.querySelector(".q-text");
       if (qT.textContent.trim() === "") return;
+      if (b.dataset.type === "open") { out.push({ text: qT.innerHTML.trim(), type: "open" }); return; }
       const rows = b.querySelectorAll(".q-answer"); const answers = []; let ok = true;
       rows.forEach(r => { const t = r.querySelector(".a-text");
         if (t.textContent.trim() === "") ok = false; answers.push(t.innerHTML.trim()); });
@@ -450,14 +463,38 @@ const Editor = (() => {
     return out;
   }
   function validate() {
-    const ok = collect().length >= 1;
-    $("#btn-start-editor").disabled = !ok;
-    $("#editor-hint").style.display = ok ? "none" : "block";
+    const errs = []; let count = 0;
+    wrap.querySelectorAll(".q-block").forEach((b, i) => {
+      const num = i + 1;
+      const hasQ = b.querySelector(".q-text").textContent.trim() !== "";
+      if (!hasQ) return;                         // בלוק בלי שאלה – מתעלמים
+      if (b.dataset.type === "open") { count++; return; }   // פתוחה צריכה רק שאלה
+      let emptyAns = false;
+      b.querySelectorAll(".q-answer .a-text").forEach(t => { if (t.textContent.trim() === "") emptyAns = true; });
+      const hasCorrect = !!b.querySelector(".q-answer.is-correct");
+      if (emptyAns) errs.push("בשאלה " + num + " חסרה תשובה");
+      else if (!hasCorrect) errs.push("בשאלה " + num + " לא מסומן איזו תשובה נכונה");
+      else count++;
+    });
+    const hint = $("#editor-hint");
+    if (errs.length) {
+      hint.innerHTML = errs.map(e => "⚠️ " + e).join("<br>");
+      hint.classList.add("err"); hint.style.display = "block";
+      $("#btn-start-editor").disabled = true;
+    } else if (count < 1) {
+      hint.textContent = "יש למלא לפחות שאלה אחת מלאה";
+      hint.classList.remove("err"); hint.style.display = "block";
+      $("#btn-start-editor").disabled = true;
+    } else {
+      hint.classList.remove("err"); hint.style.display = "none";
+      $("#btn-start-editor").disabled = false;
+    }
   }
   function persist() { if (openId) MyGames.save(openId, $("#game-title").value.trim() || "קהוט עם סבא", collect()); }
 
   $("#btn-add-quad").addEventListener("click", () => addBlock("quad"));
   $("#btn-add-tf").addEventListener("click", () => addBlock("tf"));
+  $("#btn-add-open").addEventListener("click", () => addBlock("open"));
   $("#game-title").addEventListener("input", () => { /* נשמר בעת יציאה/התחלה */ });
   $("#btn-editor-back").addEventListener("click", () => { persist(); transitionTo("screen-profile", "שומר..."); });
   $("#btn-start-editor").addEventListener("click", () => {
@@ -478,7 +515,8 @@ const SpotifyMusic = (() => {
   const REDIRECT = location.origin + location.pathname.replace(/[^/]*$/, "") + "callback.html";
   const SCOPES = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state";
 
-  let token = null, player = null, deviceId = null, connected = false, onEnded = null, lastPaused = false;
+  let token = null, player = null, deviceId = null, hasToken = false, deviceReady = false, onEnded = null, lastPaused = false;
+  function status(msg) { const s = $("#spotify-status"); if (s) s.textContent = msg; }
 
   const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const randStr = (n) => b64url(crypto.getRandomValues(new Uint8Array(n))).slice(0, n);
@@ -505,7 +543,11 @@ const SpotifyMusic = (() => {
   function onMsg(e) {
     if (e.origin !== location.origin || !e.data || !e.data.spotifyToken) return;
     token = e.data.spotifyToken;
+    hasToken = true;
     window.removeEventListener("message", onMsg);
+    // ברגע שיש token – החיפוש כבר עובד עם Spotify (שירים מלאים)
+    status("מחובר ✓ – מכין נגן...");
+    const b = $("#btn-spotify-connect"); if (b) { b.textContent = "🎧 Spotify מחובר"; b.disabled = true; }
     initPlayer();
   }
 
@@ -513,13 +555,12 @@ const SpotifyMusic = (() => {
     if (!window.Spotify || !window.Spotify.Player) { window.onSpotifyWebPlaybackSDKReady = initPlayer; return; }
     player = new window.Spotify.Player({ name: "zadok80", getOAuthToken: (cb) => cb(token), volume: 0.5 });
     player.addListener("ready", ({ device_id }) => {
-      deviceId = device_id; connected = true;
-      const s = $("#spotify-status"); if (s) s.textContent = "מחובר ✓";
-      const b = $("#btn-spotify-connect"); if (b) { b.textContent = "🎧 Spotify מחובר"; b.disabled = true; }
+      deviceId = device_id; deviceReady = true;
+      status("מחובר ומוכן לניגון ✓");
     });
     player.addListener("initialization_error", () => fail());
     player.addListener("authentication_error", () => fail());
-    player.addListener("account_error", () => { alert("נדרש חשבון Spotify Premium לניגון שירים מלאים."); });
+    player.addListener("account_error", () => { status("נדרש Spotify Premium לניגון"); alert("נדרש חשבון Spotify Premium לניגון שירים מלאים."); });
     player.addListener("player_state_changed", (st) => {
       if (!st) return;
       const ended = st.paused && st.position === 0 && st.track_window &&
@@ -529,7 +570,7 @@ const SpotifyMusic = (() => {
     });
     player.connect();
   }
-  function fail() { const s = $("#spotify-status"); if (s) s.textContent = "שגיאת התחברות"; }
+  function fail() { status("שגיאת התחברות – התחברו שוב"); }
 
   async function api(path, opts) {
     return fetch("https://api.spotify.com/v1" + path, {
@@ -543,6 +584,7 @@ const SpotifyMusic = (() => {
   }
   async function play(uri) {
     lastPaused = false;
+    if (!deviceReady) { status("הנגן עדיין נטען... נסו שוב עוד רגע"); return; }
     await api("/me/player/play?device_id=" + deviceId, { method: "PUT", body: JSON.stringify({ uris: [uri] }) });
   }
   function pause() { if (player) player.pause(); }
@@ -550,7 +592,8 @@ const SpotifyMusic = (() => {
 
   const cb = $("#btn-spotify-connect"); if (cb) cb.addEventListener("click", login);
 
-  return { search, play, pause, setVolume, isConnected: () => connected, setOnEnded: (f) => (onEnded = f) };
+  // לחיפוש מספיק token; לניגון צריך גם נגן מוכן
+  return { search, play, pause, setVolume, isConnected: () => hasToken, canPlay: () => deviceReady, setOnEnded: (f) => (onEnded = f) };
 })();
 
 /* ==========================================================================
@@ -558,7 +601,7 @@ const SpotifyMusic = (() => {
    ========================================================================== */
 const Host = (() => {
   let pin = null, gameRef = null, players = {}, questions = [];
-  let idx = -1, timerId = null, cdTimerId = null, ansUnsub = null, revealing = false, voteTime = DEFAULT_TIME;
+  let idx = -1, timerId = null, cdTimerId = null, ansUnsub = null, revealing = false, voteTime = DEFAULT_TIME, curOpen = false;
   let phase = "lobby";          // lobby | playing | paused | ended
   let pausedPid = null, pausedName = "", shareTitle = "";
   let musicVol = 0.5, playlist = [], musicIdx = 0;
@@ -713,25 +756,37 @@ const Host = (() => {
   function startQuestion(i) {
     const q = questions[i];
     const isTf = q.type === "tf";
+    const isOpen = q.type === "open";
+    curOpen = isOpen;
     remove(ref(db, "games/" + pin + "/answers/" + i));
     revealing = false;
 
     update(ref(db, "games/" + pin + "/meta"), {
-      state: "question", currentQuestion: i, startAt: serverTimestamp(),
-      optCount: q.answers.length, tf: isTf, optLabels: isTf ? q.answers : null
+      state: "question", currentQuestion: i, startAt: isOpen ? 0 : serverTimestamp(),
+      open: isOpen, prompt: isOpen ? q.text : null,
+      optCount: isOpen ? 0 : q.answers.length, tf: isTf, optLabels: isTf ? q.answers : null
     });
 
     $("#host-qnum").textContent = i + 1;
     $("#host-question-text").innerHTML = q.text;
     $("#host-answered").textContent = "0";
     const grid = $("#host-answers"); grid.innerHTML = "";
-    grid.style.gridTemplateColumns = isTf ? "1fr 1fr" : "1fr 1fr";
-    q.answers.forEach((txt, k) => {
-      const el = document.createElement("div");
-      el.className = "answer-tile c" + k;
-      el.innerHTML = `<span class="shape">${SHAPES[k]}</span><span>${txt}</span>`;
-      grid.appendChild(el);
-    });
+    const revealBtn = $("#btn-reveal");
+
+    if (isOpen) {
+      grid.innerHTML = `<div class="open-note">✍️ השחקנים כותבים תשובה. כשכולם יסיימו — לחצו "לדירוג".</div>`;
+      $("#host-timer").textContent = "∞"; $("#host-timer").classList.remove("urgent");
+      revealBtn.textContent = "✍️ לדירוג"; revealBtn.disabled = true;
+    } else {
+      grid.style.gridTemplateColumns = "1fr 1fr";
+      q.answers.forEach((txt, k) => {
+        const el = document.createElement("div");
+        el.className = "answer-tile c" + k;
+        el.innerHTML = `<span class="shape">${SHAPES[k]}</span><span>${txt}</span>`;
+        grid.appendChild(el);
+      });
+      revealBtn.textContent = "⏭️ סיים סבב"; revealBtn.disabled = false;
+    }
     showHostView("host-question");
 
     if (ansUnsub) ansUnsub();
@@ -739,17 +794,54 @@ const Host = (() => {
       const a = snap.val() || {}; const nn = Object.keys(a).length;
       $("#host-answered").textContent = nn;
       const total = Object.keys(players).length;
-      if (total > 0 && nn >= total) endQuestion();
+      if (isOpen) { revealBtn.disabled = !(total > 0 && nn >= total); }   // אי אפשר להמשיך עד שכולם כתבו
+      else if (total > 0 && nn >= total) endQuestion();
     });
 
+    clearInterval(timerId);
+    if (isOpen) return;   // שאלה פתוחה אינה על זמן
     let rem = voteTime; const tEl = $("#host-timer");
     tEl.textContent = rem; tEl.classList.remove("urgent");
-    clearInterval(timerId);
     timerId = setInterval(() => {
       rem--; tEl.textContent = Math.max(rem, 0);
       if (rem <= 5) tEl.classList.add("urgent");
       if (rem <= 0) endQuestion();
     }, 1000);
+  }
+
+  /* ---------- דירוג שאלה פתוחה ---------- */
+  async function openRating() {
+    clearInterval(timerId);
+    if (ansUnsub) { ansUnsub(); ansUnsub = null; }
+    const i = idx, q = questions[i];
+    const ansSnap = await get(ref(db, "games/" + pin + "/answers/" + i));
+    const answers = ansSnap.val() || {};
+    $("#rating-question").innerHTML = q.text;
+    const list = $("#rating-list"); list.innerHTML = "";
+    Object.entries(answers).forEach(([pid, a]) => {
+      const p = players[pid] || {};
+      const row = document.createElement("div");
+      row.className = "rating-item";
+      row.innerHTML = `<div class="ri-who">${avatarHTML(p, "ava")}${esc(p.name)}</div>
+        <div class="ri-answer">${esc(a.text || "")}</div>
+        <input type="number" class="ri-points" min="0" max="1000" step="100" value="0" data-pid="${pid}">`;
+      list.appendChild(row);
+    });
+    showHostView("host-rating");
+  }
+
+  async function applyOpenRating() {
+    const i = idx, updates = {};
+    document.querySelectorAll("#rating-list .ri-points").forEach((inp) => {
+      const pid = inp.dataset.pid;
+      const pts = Math.max(0, Math.min(1000, Number(inp.value) || 0));
+      updates["answers/" + i + "/" + pid + "/points"] = pts;
+      updates["answers/" + i + "/" + pid + "/correct"] = pts > 0;
+      updates["players/" + pid + "/score"] = ((players[pid] && players[pid].score) || 0) + pts;
+    });
+    updates["meta/state"] = "reveal"; updates["meta/open"] = true; updates["meta/correct"] = -1;
+    await update(gameRef, updates);
+    renderLeaderboardList(); showHostView("host-leaderboard"); confetti.burst(120);
   }
 
   async function endQuestion() {
@@ -796,7 +888,7 @@ const Host = (() => {
       .sort((a, b) => b.score - a.score);
   }
 
-  function showLeaderboard() {
+  function renderLeaderboardList() {
     const sorted = sortedPlayers();
     const medals = ["🥇", "🥈", "🥉"];
     const ul = $("#leaderboard-list"); ul.innerHTML = "";
@@ -806,6 +898,9 @@ const Host = (() => {
         ${avatarHTML(p, "ava")}${esc(p.name)}</span><span class="score">${p.score}</span>`;
       ul.appendChild(li);
     });
+  }
+  function showLeaderboard() {
+    renderLeaderboardList();
     update(ref(db, "games/" + pin + "/meta"), { state: "leaderboard" });
     showHostView("host-leaderboard"); confetti.burst(120);
   }
@@ -918,7 +1013,8 @@ const Host = (() => {
 
   $("#btn-copy-link").addEventListener("click", async () => { await copyText($("#join-link").value); toast("קישור ההצטרפות הועתק! 📋"); });
   $("#btn-start-game").addEventListener("click", () => countdownThenQuestion(0));
-  $("#btn-reveal").addEventListener("click", () => endQuestion());
+  $("#btn-reveal").addEventListener("click", () => { if (curOpen) openRating(); else endQuestion(); });
+  $("#btn-rating-done").addEventListener("click", () => applyOpenRating());
   $("#btn-show-leaderboard").addEventListener("click", () => showLeaderboard());
   $("#btn-next-question").addEventListener("click", () => next());
   $("#btn-restart").addEventListener("click", () => restart());
@@ -1002,7 +1098,7 @@ const Player = (() => {
     if (st === "lobby") showPlayerView("player-wait");
     else if (st === "countdown") { if (q !== lastQ) { lastQ = q; runCountdown(); } }
     else if (st === "question") renderButtons(meta);
-    else if (st === "reveal") showResult(q);
+    else if (st === "reveal") showResult(q, !!meta.open);
     else if (st === "leaderboard") { /* נשארים במסך התוצאה */ }
     else if (st === "paused") { $("#pl-paused-name").textContent = meta.pausedFor || "שחקן"; showPlayerView("player-paused"); }
     else if (st === "resume") { answered = false; resumeCountdown(() => {}); }
@@ -1020,6 +1116,7 @@ const Player = (() => {
 
   function renderButtons(meta) {
     if (answered) return;   // כבר ענה על השאלה הזו
+    if (meta.open) { renderOpenInput(meta); return; }
     $("#player-qnum").textContent = (meta.currentQuestion || 0) + 1;
     const grid = $("#player-answers"); grid.innerHTML = "";
     const isTf = !!meta.tf; const n = meta.optCount || (isTf ? 2 : 4);
@@ -1041,7 +1138,22 @@ const Player = (() => {
     showPlayerView("player-locked");
   }
 
-  async function showResult(q) {
+  function renderOpenInput(meta) {
+    $("#player-open-qnum").textContent = (meta.currentQuestion || 0) + 1;
+    $("#player-open-q").innerHTML = meta.prompt || "";
+    $("#open-answer").value = "";
+    showPlayerView("player-open");
+  }
+  async function submitOpen() {
+    if (answered) return;
+    const text = $("#open-answer").value.trim();
+    if (!text) return;
+    answered = true;
+    await set(ref(db, "games/" + pin + "/answers/" + lastQ + "/" + pid), { text, answeredAt: serverTimestamp() });
+    showPlayerView("player-locked");
+  }
+
+  async function showResult(q, isOpen) {
     const [aS, meS, plS] = await Promise.all([
       get(ref(db, "games/" + pin + "/answers/" + q + "/" + pid)),
       get(ref(db, "games/" + pin + "/players/" + pid)),
@@ -1049,8 +1161,13 @@ const Player = (() => {
     ]);
     const a = aS.val(), me = meS.val() || { score: 0 }, all = plS.val() || {};
     const ok = a && a.correct, pts = (a && a.points) || 0;
-    $("#result-emoji").textContent = ok ? "✅" : (a ? "❌" : "⏰");
-    $("#result-text").textContent = ok ? "כל הכבוד!" : (a ? "אוף, לא נכון" : "לא הספקת לענות");
+    if (isOpen) {
+      $("#result-emoji").textContent = "✍️";
+      $("#result-text").textContent = a ? "התשובה שלך דורגה!" : "לא הספקת לכתוב";
+    } else {
+      $("#result-emoji").textContent = ok ? "✅" : (a ? "❌" : "⏰");
+      $("#result-text").textContent = ok ? "כל הכבוד!" : (a ? "אוף, לא נכון" : "לא הספקת לענות");
+    }
     $("#result-points").textContent = pts;
     $("#result-total-score").textContent = me.score || 0;
     const sorted = Object.values(all).map(p => p.score || 0).sort((x, y) => y - x);
@@ -1097,6 +1214,7 @@ const Player = (() => {
 
   $("#btn-join").addEventListener("click", join);
   $("#input-name").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
+  $("#btn-open-submit").addEventListener("click", submitOpen);
   $("#btn-player-next").addEventListener("click", goHome);
   $("#btn-player-abort-home").addEventListener("click", goHome);
 

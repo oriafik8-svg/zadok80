@@ -113,6 +113,7 @@
         <div class="add-buttons">
           <button id="btn-add-quad" class="add-btn quad">➕ שאלה (4 תשובות)</button>
           <button id="btn-add-tf" class="add-btn tf">➕ אמת / שקר</button>
+          <button id="btn-add-open" class="add-btn open">➕ שאלה פתוחה</button>
         </div>
         <button id="btn-start-editor" class="cta-btn" disabled>▶️ התחל משחק</button>
         <p id="editor-hint" class="editor-hint">יש למלא לפחות שאלה אחת מלאה</p>
@@ -204,6 +205,14 @@
         <button id="btn-show-leaderboard" class="cta-btn small">🏆 ניקוד</button>
       </div>
 
+      <!-- דירוג שאלה פתוחה -->
+      <div id="host-rating" class="host-view" hidden>
+        <h2 class="reveal-title">✍️ דרגו את התשובות</h2>
+        <div class="question-board confetti-frame"><h2 id="rating-question"></h2></div>
+        <div id="rating-list" class="rating-list"></div>
+        <button id="btn-rating-done" class="cta-btn">✅ שמור והמשך</button>
+      </div>
+
       <!-- טבלת ניקוד TOP 5 -->
       <div id="host-leaderboard" class="host-view" hidden>
         <h2 class="reveal-title">🏆 TOP 5</h2>
@@ -281,6 +290,14 @@
       <div id="player-answer" class="player-view" hidden>
         <div class="player-qbar">שאלה <span id="player-qnum">1</span> • בחרו תשובה!</div>
         <div class="answers-grid player-grid" id="player-answers"></div>
+      </div>
+
+      <!-- שאלה פתוחה – כתיבת תשובה -->
+      <div id="player-open" class="player-view" hidden>
+        <div class="player-qbar">שאלה <span id="player-open-qnum">1</span> • כתבו תשובה</div>
+        <div class="q-prompt" id="player-open-q"></div>
+        <textarea id="open-answer" class="open-answer" maxlength="300" placeholder="כתבו את התשובה שלכם..."></textarea>
+        <button id="btn-open-submit" class="cta-btn">📨 שליחה</button>
       </div>
 
       <!-- ננעל -->
@@ -361,6 +378,6 @@
     <p class="countdown-text">ממשיכים...</p>
   </div>
 
-  <script type="module" src="app.js?v=5"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>

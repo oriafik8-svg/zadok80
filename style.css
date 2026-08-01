@@ -537,6 +537,31 @@ body.nav-visible #app { padding-top: 60px; }
 }
 .add-btn.quad { background: linear-gradient(90deg, var(--red) 0 25%, var(--blue) 0 50%, var(--yellow) 0 75%, var(--green) 0); }
 .add-btn.tf { background: linear-gradient(90deg, var(--red) 0 50%, var(--blue) 0); }
+.add-btn.open { background: var(--purple); border: 2px solid var(--gold); }
+
+/* הודעת שגיאה אדומה בעורך */
+.editor-hint.err { color: #fff; background: rgba(226,27,60,.9); padding: 10px 14px; border-radius: 12px; font-weight: 800; line-height: 1.6; }
+
+/* שאלה פתוחה – עורך */
+.q-open-note { font-size: 14px; opacity: .85; padding: 6px 2px; }
+
+/* מסך דירוג (מנחה) */
+.rating-list { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 10px; }
+.rating-item {
+  background: var(--white); color: var(--purple-dark); border-radius: 14px; padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow);
+}
+.rating-item .ri-who { display: flex; align-items: center; gap: 8px; font-weight: 800; min-width: 120px; }
+.rating-item .ri-answer { flex: 1; text-align: right; font-size: 16px; }
+.rating-item .ri-points { width: 90px; font-family: inherit; font-size: 18px; font-weight: 800; text-align: center; padding: 8px; border-radius: 10px; border: 2px solid var(--purple); }
+
+/* שאלה פתוחה – שחקן */
+.q-prompt { background: var(--white); color: var(--purple-dark); border-radius: 14px; padding: 16px; font-size: 20px; font-weight: 800; width: 100%; }
+.open-answer {
+  width: 100%; min-height: 120px; font-family: inherit; font-size: 18px; padding: 14px; border-radius: 14px;
+  border: 3px solid rgba(255,255,255,.5); background: rgba(255,255,255,.97); color: var(--purple-dark); resize: vertical;
+}
+.open-note { background: rgba(255,255,255,.15); border-radius: 12px; padding: 16px; font-size: 18px; font-weight: 700; }
 
 .q-tab-btn {
   border: 2px solid var(--gold); background: rgba(255,210,63,.2); color: var(--white);
