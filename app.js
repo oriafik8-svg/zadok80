@@ -393,6 +393,17 @@ const Editor = (() => {
     const answersHtml = isOpen
       ? `<div class="q-open-note">✍️ השחקנים יכתבו תשובה חופשית, ואתם תדרגו כל תשובה בזמן אמת. אין טיימר.</div>`
       : `<div class="q-answers">${rows}</div>`;
+    const settingsHtml = `
+      <div class="q-settings">
+        <label>💯 ניקוד:
+          <select class="q-mult">
+            <option value="1">×1 רגיל</option>
+            <option value="2">×2 כפול</option>
+            <option value="3">×3 משולש</option>
+          </select>
+        </label>
+        ${isOpen ? "" : `<label>⏱️ זמן: <input type="number" class="q-time" min="5" max="120" step="5" value="20"> שנ'</label>`}
+      </div>`;
     block.innerHTML = `
       <div class="q-block-head">
         <span class="q-index"></span>
@@ -401,6 +412,7 @@ const Editor = (() => {
         <button type="button" class="q-remove" title="מחק">🗑️</button>
       </div>
       <div class="q-text editable" contenteditable="true" data-ph="${phQ}"></div>
+      ${settingsHtml}
       ${answersHtml}`;
     wrap.appendChild(block);
 
@@ -412,6 +424,8 @@ const Editor = (() => {
         const r = block.querySelector(`.q-answer[data-idx="${data.correct}"]`);
         if (r) r.classList.add("is-correct");
       }
+      const mSel = block.querySelector(".q-mult"); if (mSel && data.mult) mSel.value = String(data.mult);
+      const tIn = block.querySelector(".q-time"); if (tIn && data.time) tIn.value = data.time;
     } else if (type === "tf") {
       const aT = block.querySelectorAll(".a-text");
       aT[0].textContent = "אמת"; aT[1].textContent = "שקר";
@@ -452,13 +466,15 @@ const Editor = (() => {
     wrap.querySelectorAll(".q-block").forEach(b => {
       const qT = b.querySelector(".q-text");
       if (qT.textContent.trim() === "") return;
-      if (b.dataset.type === "open") { out.push({ text: qT.innerHTML.trim(), type: "open" }); return; }
+      const mult = Number((b.querySelector(".q-mult") || {}).value) || 1;
+      if (b.dataset.type === "open") { out.push({ text: qT.innerHTML.trim(), type: "open", mult }); return; }
       const rows = b.querySelectorAll(".q-answer"); const answers = []; let ok = true;
       rows.forEach(r => { const t = r.querySelector(".a-text");
         if (t.textContent.trim() === "") ok = false; answers.push(t.innerHTML.trim()); });
       const correct = b.querySelector(".q-answer.is-correct");
       if (!ok || !correct) return;
-      out.push({ text: qT.innerHTML.trim(), answers, correct: Number(correct.dataset.idx), type: b.dataset.type });
+      const time = Math.max(5, Math.min(120, Number((b.querySelector(".q-time") || {}).value) || 20));
+      out.push({ text: qT.innerHTML.trim(), answers, correct: Number(correct.dataset.idx), type: b.dataset.type, mult, time });
     });
     return out;
   }
@@ -602,6 +618,9 @@ const SpotifyMusic = (() => {
 const Host = (() => {
   let pin = null, gameRef = null, players = {}, questions = [];
   let idx = -1, timerId = null, cdTimerId = null, ansUnsub = null, revealing = false, voteTime = DEFAULT_TIME, curOpen = false;
+  let curMult = 1, curLimit = DEFAULT_TIME;
+  const multBig = (m) => (m > 1 ? "×" + m + " נקודות! 🔥" : "");
+  const multTag = (m) => (m > 1 ? "×" + m : "");
   let phase = "lobby";          // lobby | playing | paused | ended
   let pausedPid = null, pausedName = "", shareTitle = "";
   let musicVol = 0.5, playlist = [], musicIdx = 0;
@@ -742,8 +761,10 @@ const Host = (() => {
   function countdownThenQuestion(i) {
     idx = i;
     if (i === 0) { phase = "playing"; startMusic(); }
-    update(ref(db, "games/" + pin + "/meta"), { state: "countdown", currentQuestion: i });
+    const mult = (questions[i] && questions[i].mult) || 1;
+    update(ref(db, "games/" + pin + "/meta"), { state: "countdown", currentQuestion: i, mult });
     showHostView("host-countdown");
+    const mb = $("#host-mult"); mb.textContent = multBig(mult); mb.hidden = mult <= 1;
     let c = 5; const el = $("#host-countdown-num"); el.textContent = c;
     clearInterval(cdTimerId);
     cdTimerId = setInterval(() => {
@@ -758,15 +779,18 @@ const Host = (() => {
     const isTf = q.type === "tf";
     const isOpen = q.type === "open";
     curOpen = isOpen;
+    curMult = q.mult || 1;
+    curLimit = q.time || voteTime;
     remove(ref(db, "games/" + pin + "/answers/" + i));
     revealing = false;
 
     update(ref(db, "games/" + pin + "/meta"), {
       state: "question", currentQuestion: i, startAt: isOpen ? 0 : serverTimestamp(),
-      open: isOpen, prompt: isOpen ? q.text : null,
+      open: isOpen, prompt: isOpen ? q.text : null, mult: curMult,
       optCount: isOpen ? 0 : q.answers.length, tf: isTf, optLabels: isTf ? q.answers : null
     });
 
+    const hmb = $("#host-mult-badge"); hmb.textContent = multTag(curMult); hmb.hidden = curMult <= 1;
     $("#host-qnum").textContent = i + 1;
     $("#host-question-text").innerHTML = q.text;
     $("#host-answered").textContent = "0";
@@ -800,7 +824,7 @@ const Host = (() => {
 
     clearInterval(timerId);
     if (isOpen) return;   // שאלה פתוחה אינה על זמן
-    let rem = voteTime; const tEl = $("#host-timer");
+    let rem = curLimit; const tEl = $("#host-timer");
     tEl.textContent = rem; tEl.classList.remove("urgent");
     timerId = setInterval(() => {
       rem--; tEl.textContent = Math.max(rem, 0);
@@ -834,7 +858,7 @@ const Host = (() => {
     const i = idx, updates = {};
     document.querySelectorAll("#rating-list .ri-points").forEach((inp) => {
       const pid = inp.dataset.pid;
-      const pts = Math.max(0, Math.min(1000, Number(inp.value) || 0));
+      const pts = Math.max(0, Math.min(1000, Number(inp.value) || 0)) * curMult;
       updates["answers/" + i + "/" + pid + "/points"] = pts;
       updates["answers/" + i + "/" + pid + "/correct"] = pts > 0;
       updates["players/" + pid + "/score"] = ((players[pid] && players[pid].score) || 0) + pts;
@@ -848,7 +872,7 @@ const Host = (() => {
     if (revealing) return; revealing = true;
     clearInterval(timerId);
     if (ansUnsub) { ansUnsub(); ansUnsub = null; }
-    const i = idx, q = questions[i], limit = voteTime * 1000;
+    const i = idx, q = questions[i], limit = curLimit * 1000, mult = curMult;
 
     const [mSnap, aSnap] = await Promise.all([
       get(ref(db, "games/" + pin + "/meta/startAt")),
@@ -860,7 +884,7 @@ const Host = (() => {
       const ch = a.choice; if (ch >= 0 && ch < 4) counts[ch]++;
       const ok = ch === q.correct; let pts = 0;
       if (ok) { const el = Math.max(0, (a.answeredAt || startAt) - startAt);
-        pts = Math.round(500 + 500 * Math.max(0, 1 - el / limit)); }
+        pts = Math.round((500 + 500 * Math.max(0, 1 - el / limit)) * mult); }
       updates["answers/" + i + "/" + pid + "/correct"] = ok;
       updates["answers/" + i + "/" + pid + "/points"] = pts;
       updates["players/" + pid + "/score"] = ((players[pid] && players[pid].score) || 0) + pts;
@@ -1096,7 +1120,7 @@ const Player = (() => {
   function onMeta(meta) {
     const st = meta.state, q = meta.currentQuestion;
     if (st === "lobby") showPlayerView("player-wait");
-    else if (st === "countdown") { if (q !== lastQ) { lastQ = q; runCountdown(); } }
+    else if (st === "countdown") { if (q !== lastQ) { lastQ = q; runCountdown(meta); } }
     else if (st === "question") renderButtons(meta);
     else if (st === "reveal") showResult(q, !!meta.open);
     else if (st === "leaderboard") { /* נשארים במסך התוצאה */ }
@@ -1106,8 +1130,10 @@ const Player = (() => {
     else if (st === "aborted") showPlayerView("player-aborted");
   }
 
-  function runCountdown() {
+  function runCountdown(meta) {
     answered = false;
+    const m = (meta && meta.mult) || 1;
+    const mb = $("#player-mult"); mb.textContent = m > 1 ? "×" + m + " נקודות! 🔥" : ""; mb.hidden = m <= 1;
     showPlayerView("player-countdown");
     let c = 5; const el = $("#player-countdown-num"); el.textContent = c;
     clearInterval(cdTimer);
@@ -1118,6 +1144,8 @@ const Player = (() => {
     if (answered) return;   // כבר ענה על השאלה הזו
     if (meta.open) { renderOpenInput(meta); return; }
     $("#player-qnum").textContent = (meta.currentQuestion || 0) + 1;
+    const pmb = $("#player-mult-badge"); const pm = meta.mult || 1;
+    pmb.textContent = pm > 1 ? "×" + pm : ""; pmb.hidden = pm <= 1;
     const grid = $("#player-answers"); grid.innerHTML = "";
     const isTf = !!meta.tf; const n = meta.optCount || (isTf ? 2 : 4);
     grid.style.gridTemplateColumns = "1fr 1fr";

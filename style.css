@@ -563,6 +563,26 @@ body.nav-visible #app { padding-top: 60px; }
 }
 .open-note { background: rgba(255,255,255,.15); border-radius: 12px; padding: 16px; font-size: 18px; font-weight: 700; }
 
+/* הגדרות שאלה בעורך (מכפיל + זמן) */
+.q-settings { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding: 4px 2px; }
+.q-settings label { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.q-settings select, .q-settings .q-time {
+  font-family: inherit; font-size: 15px; font-weight: 700; padding: 6px 8px; border-radius: 8px;
+  border: 2px solid var(--purple); background: #fff; color: var(--purple-dark);
+}
+.q-settings .q-time { width: 70px; text-align: center; }
+
+/* מכפיל ניקוד – תצוגה גדולה לפני ההצבעה */
+.mult-big {
+  font-size: clamp(40px, 12vw, 90px); font-weight: 900; color: var(--gold);
+  text-shadow: 0 4px 0 rgba(0,0,0,.35); animation: pop 1.2s ease-in-out infinite; margin-top: 4px;
+}
+.mult-badge {
+  display: inline-block; background: var(--gold); color: var(--purple-dark);
+  font-weight: 900; padding: 2px 12px; border-radius: 20px; font-size: 18px; margin-inline-start: 6px;
+  animation: pop 1.4s ease-in-out infinite;
+}
+
 .q-tab-btn {
   border: 2px solid var(--gold); background: rgba(255,210,63,.2); color: var(--white);
   font-weight: 800; font-size: 13px; border-radius: 8px; padding: 4px 10px; cursor: pointer; white-space: nowrap;

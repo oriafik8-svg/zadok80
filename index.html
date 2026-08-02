@@ -181,12 +181,13 @@
       <div id="host-countdown" class="host-view countdown-view" hidden>
         <div class="countdown-num" id="host-countdown-num">5</div>
         <p class="countdown-text">מתכוננים...</p>
+        <div id="host-mult" class="mult-big" hidden></div>
       </div>
 
       <!-- שאלה -->
       <div id="host-question" class="host-view" hidden>
         <div class="q-topbar">
-          <div class="q-counter">שאלה <span id="host-qnum">1</span>/<span id="host-qtotal">1</span></div>
+          <div class="q-counter">שאלה <span id="host-qnum">1</span>/<span id="host-qtotal">1</span> <span id="host-mult-badge" class="mult-badge" hidden></span></div>
           <div class="timer" id="host-timer">60</div>
           <div class="answered-count">הצביעו: <span id="host-answered">0</span>/<span id="host-players-total">0</span></div>
         </div>
@@ -284,11 +285,12 @@
       <div id="player-countdown" class="player-view countdown-view" hidden>
         <div class="countdown-num" id="player-countdown-num">5</div>
         <p class="countdown-text">מתכוננים...</p>
+        <div id="player-mult" class="mult-big" hidden></div>
       </div>
 
       <!-- כפתורי תשובה -->
       <div id="player-answer" class="player-view" hidden>
-        <div class="player-qbar">שאלה <span id="player-qnum">1</span> • בחרו תשובה!</div>
+        <div class="player-qbar">שאלה <span id="player-qnum">1</span> • בחרו תשובה! <span id="player-mult-badge" class="mult-badge" hidden></span></div>
         <div class="answers-grid player-grid" id="player-answers"></div>
       </div>
 
@@ -378,6 +380,6 @@
     <p class="countdown-text">ממשיכים...</p>
   </div>
 
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>
