@@ -264,7 +264,7 @@ const MyGames = (() => {
       li.className = "mygame-item";
       li.innerHTML = `
         <span class="mygame-name">${esc(g.name || "משחק")}</span>
-        <span class="mygame-meta">${count} שאלות</span>
+        <span class="mygame-meta">${count} שאלות${g.collabId ? " · 👥 משותף" : ""}</span>
         <span class="mygame-actions">
           <button class="mini-btn play" title="שחק">▶️</button>
           <button class="mini-btn edit" title="ערוך">✏️</button>
@@ -296,11 +296,25 @@ const MyGames = (() => {
     Editor.open(gRef.key, data, true);
     transitionTo("screen-editor", "יוצר משחק חדש...");
   }
-  function edit(id) { Editor.open(id, games[id], false); transitionTo("screen-editor", "פותח עורך..."); }
-  function play(id) {
-    const qs = (games[id].questions || []);
+  // טוען את הנתונים העדכניים – ממקור השיתוף אם המשחק משותף (linked)
+  async function freshData(id) {
+    let data = games[id] || {};
+    if (data.collabId) {
+      const snap = await get(ref(db, "shared/" + data.collabId));
+      if (snap.exists()) { const sg = snap.val(); data = { ...data, name: sg.name || data.name, questions: sg.questions || [] }; }
+    }
+    return data;
+  }
+  async function edit(id) {
+    const data = await freshData(id);
+    Editor.open(id, data, false);
+    transitionTo("screen-editor", "פותח עורך...");
+  }
+  async function play(id) {
+    const data = await freshData(id);
+    const qs = data.questions || [];
     if (qs.length === 0) { alert("אין שאלות במשחק הזה. ערכו אותו קודם."); return; }
-    transitionTo("screen-host", "מכין משחק...", () => Host.init(qs, games[id].name));
+    transitionTo("screen-host", "מכין משחק...", () => Host.init(qs, data.name));
   }
   async function duplicate(id) {
     const src = games[id];
@@ -314,6 +328,9 @@ const MyGames = (() => {
   async function save(id, name, questions) {
     if (!currentUser || !id) return;
     await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { name, questions, updatedAt: Date.now() });
+    // אם המשחק משותף – שומרים גם למקור המשותף (סנכרון לכל השותפים)
+    const g = games[id] || (await get(ref(db, "users/" + currentUser.uid + "/games/" + id))).val() || {};
+    if (g.collabId) await set(ref(db, "shared/" + g.collabId), { name, questions, updatedAt: Date.now() });
   }
 
   /* מפרסם עותק ציבורי של המשחק ומחזיר את מזהה השיתוף */
@@ -323,36 +340,54 @@ const MyGames = (() => {
     return sid;
   }
 
-  /* שיתוף משחק מהפרופיל – יוצר קישור ששומר את המשחק אצל הנמען */
+  /* שיתוף משחק – מפעיל עריכה משותפת ומעתיק קישור.
+     הנמען יבחר בקישור: עריכה משותפת (סנכרון דו-כיווני) או צפייה (עותק). */
   async function shareGame(id) {
     const g = games[id]; if (!g) return;
     try {
-      const sid = await publishShared(g.name, g.questions, g.shareId);
-      if (!g.shareId) await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { shareId: sid });
+      const sid = g.collabId || push(ref(db, "shared")).key;
+      await set(ref(db, "shared/" + sid), { name: g.name, questions: g.questions || [], updatedAt: Date.now() });
+      if (!g.collabId) await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { collabId: sid, linked: true });
       const url = APP_BASE() + "?game=" + sid;
       await copyText(url);
-      toast("הקישור הועתק! שתפו כדי שישמרו את המשחק 🔗");
+      toast("קישור השיתוף הועתק! 👥 הנמען יבחר עריכה משותפת או צפייה");
     } catch (e) {
       console.error("share error", e);
       toast("שגיאת שיתוף. ודאו שהוספתם את חוקי 'shared' ב-Firebase (ראו README).");
     }
   }
 
-  /* ייבוא משחק משותף לפרופיל (עם מניעת כפילויות) */
+  /* צפייה: ייבוא עותק עצמאי לפרופיל (לא מסונכרן) */
   async function importShared(sid) {
     if (!currentUser || !sid) return;
     const snap = await get(ref(db, "shared/" + sid));
-    if (!snap.exists()) return;
+    if (!snap.exists()) { toast("המשחק לא נמצא 😕"); return; }
+    const sg = snap.val();
+    const gRef = push(ref(db, "users/" + currentUser.uid + "/games"));
+    await set(gRef, { name: (sg.name || "משחק") + " (עותק)", questions: sg.questions || [], updatedAt: Date.now() });
+    toast("נשמר עותק בפרופיל שלך 🎮");
+  }
+
+  /* עריכה משותפת: יוצר מצביע מקושר (linked) לאותו מקור, ופותח עורך */
+  async function importCollab(sid) {
+    if (!currentUser || !sid) return;
+    const snap = await get(ref(db, "shared/" + sid));
+    if (!snap.exists()) { toast("המשחק לא נמצא 😕"); return; }
     const sg = snap.val();
     const mine = (await get(ref(db, "users/" + currentUser.uid + "/games"))).val() || {};
-    if (Object.values(mine).some((g) => g.shareId === sid)) return; // כבר קיים
-    const gRef = push(ref(db, "users/" + currentUser.uid + "/games"));
-    await set(gRef, { name: sg.name || "משחק משותף", questions: sg.questions || [], shareId: sid, updatedAt: Date.now() });
-    toast("המשחק נשמר בפרופיל שלך 🎮");
+    let existingId = Object.keys(mine).find((k) => mine[k].collabId === sid);
+    if (!existingId) {
+      const gRef = push(ref(db, "users/" + currentUser.uid + "/games"));
+      await set(gRef, { name: sg.name || "משחק משותף", questions: sg.questions || [], collabId: sid, linked: true, updatedAt: Date.now() });
+      existingId = gRef.key;
+    }
+    toast("נוסף לפרופיל כמשחק לעריכה משותפת 👥");
+    Editor.open(existingId, { name: sg.name, questions: sg.questions || [], collabId: sid, linked: true }, false);
+    transitionTo("screen-editor", "פותח עריכה משותפת...");
   }
 
   $("#btn-new-game").addEventListener("click", create);
-  return { load, save, publishShared, importShared };
+  return { load, save, publishShared, importShared, importCollab };
 })();
 
 /* ==========================================================================
@@ -1278,14 +1313,22 @@ const gameParam = _params.get("game");
 const hasPin = pinParam && /^\d{4,6}$/.test(pinParam);
 Auth.watch();
 
-if (gameParam || hasPin) {
+if (hasPin) {
+  // קישור לובי: שמירת עותק + הצטרפות למשחק החי
   requireAuth(async () => {
-    if (gameParam) await MyGames.importShared(gameParam);   // שומר את המשחק בפרופיל
-    if (hasPin) {                                            // + מצטרף למשחק החי
-      Player.prefill(); $("#input-pin").value = pinParam; transitionTo("screen-player", "מצטרפים...");
-    } else {                                                 // רק שמירה → מסך הפרופיל
-      transitionTo("screen-profile", "שומר את המשחק...");
-    }
+    if (gameParam) await MyGames.importShared(gameParam);
+    Player.prefill(); $("#input-pin").value = pinParam; transitionTo("screen-player", "מצטרפים...");
+  });
+} else if (gameParam) {
+  // קישור שיתוף: בחירה בין עריכה משותפת לבין צפייה (עותק)
+  requireAuth(() => {
+    showScreen("screen-profile");
+    showModal(
+      "קיבלת משחק משותף — איך לפתוח אותו?",
+      "✏️ עריכה משותפת", "👁️ צפייה (עותק)",
+      () => MyGames.importCollab(gameParam),
+      () => { MyGames.importShared(gameParam); transitionTo("screen-profile", "שומר עותק..."); }
+    );
   });
 } else {
   showScreen("screen-home");
