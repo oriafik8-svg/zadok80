@@ -50,6 +50,7 @@ const $  = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; };
 const genPin = () => String(Math.floor(100000 + Math.random() * 900000));
+const myTag = Math.random().toString(36).slice(2) + Date.now().toString(36); // מזהה לקוח – לזיהוי ההד שלנו בעריכה משותפת
 
 let currentUser = null;      // אובייקט המשתמש המחובר
 let pendingAction = null;    // פעולה להרצה אחרי התחברות
@@ -341,7 +342,7 @@ const MyGames = (() => {
     // סנכרון למקור המשותף (אם קיים) – לא חוסם ולא מפיל את השמירה הראשית אם נכשל
     const g = games[id] || {};
     if (g.collabId) {
-      try { await set(ref(db, "shared/" + g.collabId), { name, questions, updatedAt: now }); }
+      try { await set(ref(db, "shared/" + g.collabId), { name, questions, updatedAt: now, tag: myTag }); }
       catch (e) { console.warn("collab sync failed (check 'shared' rules)", e); }
     }
   }
@@ -359,7 +360,7 @@ const MyGames = (() => {
     const g = games[id]; if (!g) return;
     try {
       const sid = g.collabId || push(ref(db, "shared")).key;
-      await set(ref(db, "shared/" + sid), { name: g.name, questions: g.questions || [], updatedAt: Date.now() });
+      await set(ref(db, "shared/" + sid), { name: g.name, questions: g.questions || [], updatedAt: Date.now(), tag: myTag });
       if (!g.collabId) await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { collabId: sid, linked: true });
       const url = APP_BASE() + "?game=" + sid;
       await copyText(url);
@@ -409,15 +410,58 @@ const MyGames = (() => {
 const Editor = (() => {
   const wrap = $("#questions-editor");
   let seq = 0, openId = null;
+  let curCollab = null, collabUnsub = null, autosaveTimer = null, lastRenderedAt = 0, pendingRemote = null;
 
-  function open(id, data, isNew) {
-    openId = id;
+  function buildBlocks(name, questions) {
     wrap.innerHTML = ""; seq = 0;
-    $("#game-title").value = (data && data.name) || "קהוט עם סבא";
-    const qs = (data && data.questions) || [];
+    $("#game-title").value = name || "קהוט עם סבא";
+    const qs = questions || [];
     if (qs.length) qs.forEach((q, i) => addBlock(q.type || "quad", q, i === 0));
     else addBlock("quad", null, true);  // משחק חדש: שאלת דוגמה ראשונה
     validate();
+  }
+
+  function open(id, data, isNew) {
+    openId = id;
+    if (collabUnsub) { collabUnsub(); collabUnsub = null; }
+    pendingRemote = null;
+    curCollab = (data && data.collabId) || null;
+    buildBlocks(data && data.name, data && data.questions);
+    lastRenderedAt = (data && data.updatedAt) || Date.now();
+    if (curCollab) subscribeCollab();
+  }
+
+  /* ---------- עריכה משותפת בזמן אמת ---------- */
+  const isEditorFocused = () => {
+    const a = document.activeElement;
+    return !!(a && (a.id === "game-title" || wrap.contains(a)));
+  };
+  function subscribeCollab() {
+    collabUnsub = onValue(ref(db, "shared/" + curCollab), (snap) => {
+      const sg = snap.val(); if (!sg) return;
+      if (sg.tag === myTag) return;                        // ההד שלנו – מתעלמים
+      if ((sg.updatedAt || 0) <= lastRenderedAt) return;   // לא חדש יותר
+      if (isEditorFocused()) { pendingRemote = sg; toast("✍️ שינויים מהשותף ממתינים – עצרו רגע"); }
+      else applyRemote(sg);
+    });
+  }
+  function applyRemote(sg) {
+    buildBlocks(sg.name, sg.questions);
+    lastRenderedAt = sg.updatedAt || Date.now();
+    toast("עודכן על-ידי השותף 👥");
+  }
+  function flushPending() {
+    setTimeout(() => {
+      if (pendingRemote && !isEditorFocused()) { const sg = pendingRemote; pendingRemote = null; applyRemote(sg); }
+    }, 80);
+  }
+  function scheduleAutosave() {
+    if (!openId) return;
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(async () => {
+      lastRenderedAt = Date.now();
+      try { await MyGames.save(openId, $("#game-title").value.trim() || "קהוט עם סבא", collectAll()); } catch (e) {}
+    }, 700);
   }
 
   function addBlock(type, data, isFirst) {
@@ -481,9 +525,11 @@ const Editor = (() => {
 
     block.querySelectorAll(".editable").forEach(el => {
       refreshPh(el);
-      el.addEventListener("input", () => { refreshPh(el); validate(); });
+      el.addEventListener("input", () => { refreshPh(el); validate(); scheduleAutosave(); });
       el.addEventListener("blur", () => refreshPh(el));
     });
+    const mSel = block.querySelector(".q-mult"); if (mSel) mSel.addEventListener("change", scheduleAutosave);
+    const tIn = block.querySelector(".q-time"); if (tIn) tIn.addEventListener("input", scheduleAutosave);
     // TAB בשדה השאלה משלים דוגמה כשהוא ריק
     const qText = block.querySelector(".q-text");
     qText.addEventListener("keydown", (e) => {
@@ -495,9 +541,9 @@ const Editor = (() => {
 
     block.querySelectorAll(".mark-correct").forEach(btn => btn.addEventListener("click", () => {
       block.querySelectorAll(".q-answer").forEach(r => r.classList.remove("is-correct"));
-      btn.closest(".q-answer").classList.add("is-correct"); validate();
+      btn.closest(".q-answer").classList.add("is-correct"); validate(); scheduleAutosave();
     }));
-    block.querySelector(".q-remove").addEventListener("click", () => { block.remove(); renumber(); validate(); });
+    block.querySelector(".q-remove").addEventListener("click", () => { block.remove(); renumber(); validate(); scheduleAutosave(); });
     renumber();
   }
 
@@ -581,16 +627,22 @@ const Editor = (() => {
     await MyGames.save(openId, $("#game-title").value.trim() || "קהוט עם סבא", collectAll());
   }
 
-  $("#btn-add-quad").addEventListener("click", () => addBlock("quad"));
-  $("#btn-add-tf").addEventListener("click", () => addBlock("tf"));
-  $("#btn-add-open").addEventListener("click", () => addBlock("open"));
-  $("#game-title").addEventListener("input", () => { /* נשמר בעת יציאה/התחלה */ });
+  const detachCollab = () => { if (collabUnsub) { collabUnsub(); collabUnsub = null; } clearTimeout(autosaveTimer); };
+
+  $("#btn-add-quad").addEventListener("click", () => { addBlock("quad"); scheduleAutosave(); });
+  $("#btn-add-tf").addEventListener("click", () => { addBlock("tf"); scheduleAutosave(); });
+  $("#btn-add-open").addEventListener("click", () => { addBlock("open"); scheduleAutosave(); });
+  $("#game-title").addEventListener("input", scheduleAutosave);
+  $("#game-title").addEventListener("focusout", flushPending);
+  wrap.addEventListener("focusout", flushPending);
   $("#btn-editor-back").addEventListener("click", async () => {
+    detachCollab();
     try { await persist(); toast("נשמר ✓"); } catch (e) { toast("שגיאת שמירה – בדקו חיבור/כללי Firebase"); }
     transitionTo("screen-profile", "שומר...");
   });
   $("#btn-start-editor").addEventListener("click", async () => {
     const qs = collect(); if (!qs.length) return;
+    detachCollab();
     try { await persist(); } catch (e) {}
     transitionTo("screen-host", "מכין משחק...", () => Host.init(qs, $("#game-title").value.trim()));
   });
