@@ -300,8 +300,16 @@ const MyGames = (() => {
   async function freshData(id) {
     let data = games[id] || {};
     if (data.collabId) {
-      const snap = await get(ref(db, "shared/" + data.collabId));
-      if (snap.exists()) { const sg = snap.val(); data = { ...data, name: sg.name || data.name, questions: sg.questions || [] }; }
+      try {
+        const snap = await get(ref(db, "shared/" + data.collabId));
+        if (snap.exists()) {
+          const sg = snap.val();
+          // משתמשים בגרסה המשותפת רק אם היא חדשה יותר – כדי לא לדרוס עריכות מקומיות חדשות
+          if ((sg.updatedAt || 0) >= (data.updatedAt || 0)) {
+            data = { ...data, name: sg.name || data.name, questions: sg.questions || [] };
+          }
+        }
+      } catch (e) { /* אם המקור המשותף לא נגיש – משתמשים בעותק המקומי */ }
     }
     return data;
   }
@@ -327,10 +335,15 @@ const MyGames = (() => {
   }
   async function save(id, name, questions) {
     if (!currentUser || !id) return;
-    await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { name, questions, updatedAt: Date.now() });
-    // אם המשחק משותף – שומרים גם למקור המשותף (סנכרון לכל השותפים)
-    const g = games[id] || (await get(ref(db, "users/" + currentUser.uid + "/games/" + id))).val() || {};
-    if (g.collabId) await set(ref(db, "shared/" + g.collabId), { name, questions, updatedAt: Date.now() });
+    const now = Date.now();
+    // שמירה ראשית לפרופיל – זה הדבר הקריטי
+    await update(ref(db, "users/" + currentUser.uid + "/games/" + id), { name, questions, updatedAt: now });
+    // סנכרון למקור המשותף (אם קיים) – לא חוסם ולא מפיל את השמירה הראשית אם נכשל
+    const g = games[id] || {};
+    if (g.collabId) {
+      try { await set(ref(db, "shared/" + g.collabId), { name, questions, updatedAt: now }); }
+      catch (e) { console.warn("collab sync failed (check 'shared' rules)", e); }
+    }
   }
 
   /* מפרסם עותק ציבורי של המשחק ומחזיר את מזהה השיתוף */
@@ -541,16 +554,44 @@ const Editor = (() => {
       $("#btn-start-editor").disabled = false;
     }
   }
-  function persist() { if (openId) MyGames.save(openId, $("#game-title").value.trim() || "קהוט עם סבא", collect()); }
+  /* אוסף את כל הבלוקים – כולל לא-גמורים – כדי שאף עריכה לא תיאבד בשמירה */
+  function collectAll() {
+    const out = [];
+    wrap.querySelectorAll(".q-block").forEach(b => {
+      const qT = b.querySelector(".q-text");
+      const type = b.dataset.type;
+      const mult = Number((b.querySelector(".q-mult") || {}).value) || 1;
+      const qHtml = qT.innerHTML.trim();
+      if (type === "open") {
+        if (qT.textContent.trim() === "") return;           // בלוק פתוח ריק לגמרי – מדלגים
+        out.push({ text: qHtml, type: "open", mult });
+        return;
+      }
+      const answers = [...b.querySelectorAll(".q-answer .a-text")].map(t => t.innerHTML.trim());
+      const allEmpty = qT.textContent.trim() === "" && answers.every(a => a === "");
+      if (allEmpty) return;                                  // בלוק ריק לגמרי – מדלגים
+      const correctEl = b.querySelector(".q-answer.is-correct");
+      const time = Math.max(5, Math.min(120, Number((b.querySelector(".q-time") || {}).value) || 20));
+      out.push({ text: qHtml, answers, correct: correctEl ? Number(correctEl.dataset.idx) : null, type, mult, time });
+    });
+    return out;
+  }
+  async function persist() {
+    if (!openId) return;
+    await MyGames.save(openId, $("#game-title").value.trim() || "קהוט עם סבא", collectAll());
+  }
 
   $("#btn-add-quad").addEventListener("click", () => addBlock("quad"));
   $("#btn-add-tf").addEventListener("click", () => addBlock("tf"));
   $("#btn-add-open").addEventListener("click", () => addBlock("open"));
   $("#game-title").addEventListener("input", () => { /* נשמר בעת יציאה/התחלה */ });
-  $("#btn-editor-back").addEventListener("click", () => { persist(); transitionTo("screen-profile", "שומר..."); });
-  $("#btn-start-editor").addEventListener("click", () => {
+  $("#btn-editor-back").addEventListener("click", async () => {
+    try { await persist(); toast("נשמר ✓"); } catch (e) { toast("שגיאת שמירה – בדקו חיבור/כללי Firebase"); }
+    transitionTo("screen-profile", "שומר...");
+  });
+  $("#btn-start-editor").addEventListener("click", async () => {
     const qs = collect(); if (!qs.length) return;
-    persist();
+    try { await persist(); } catch (e) {}
     transitionTo("screen-host", "מכין משחק...", () => Host.init(qs, $("#game-title").value.trim()));
   });
 
