@@ -724,7 +724,9 @@ const SpotifyMusic = (() => {
     });
   }
   async function search(q) {
-    const r = await api("/search?type=track&limit=25&q=" + encodeURIComponent(q));
+    const r = await api("/search?type=track&limit=25&market=from_token&q=" + encodeURIComponent(q));
+    if (r.status === 401) { hasToken = false; status("פג תוקף – התחברו שוב ל-Spotify"); throw new Error("401 – התחברו מחדש"); }
+    if (!r.ok) throw new Error("Spotify " + r.status);
     const d = await r.json();
     return (d.tracks && d.tracks.items) || [];
   }
@@ -1144,8 +1146,10 @@ const Host = (() => {
     box.innerHTML = `<p class="music-hint">מחפש...</p>`;
     try {
       if (SpotifyMusic.isConnected()) {
-        const items = await SpotifyMusic.search(q);
-        if (!items.length) { box.innerHTML = `<p class="music-hint">לא נמצאו תוצאות 😕</p>`; return; }
+        let items;
+        try { items = await SpotifyMusic.search(q); }
+        catch (e) { box.innerHTML = `<p class="music-hint">בעיה בחיפוש Spotify: ${esc(e.message || "")}. נסו להתחבר מחדש.</p>`; return; }
+        if (!items.length) { box.innerHTML = `<p class="music-hint">לא נמצאו תוצאות ב-Spotify 😕</p>`; return; }
         box.innerHTML = "";
         items.forEach((it) => {
           const art = it.album && it.album.images && it.album.images.length ? it.album.images[it.album.images.length - 1].url : "";
