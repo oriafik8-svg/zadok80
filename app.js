@@ -659,8 +659,10 @@ const SpotifyMusic = (() => {
   const REDIRECT = location.origin + location.pathname.replace(/[^/]*$/, "") + "callback.html";
   const SCOPES = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state";
 
-  let token = null, player = null, deviceId = null, hasToken = false, deviceReady = false, onEnded = null, lastPaused = false;
+  let token = null, player = null, deviceId = null, hasToken = false, deviceReady = false, onEnded = null, lastPaused = false, pendingPlayerInit = false;
   function status(msg) { const s = $("#spotify-status"); if (s) s.textContent = msg; }
+  // מוגדר מיד בטעינה כדי שה-SDK לא יזרוק שגיאה כשהוא נטען
+  window.onSpotifyWebPlaybackSDKReady = () => { if (pendingPlayerInit) { pendingPlayerInit = false; initPlayer(); } };
 
   const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const randStr = (n) => b64url(crypto.getRandomValues(new Uint8Array(n))).slice(0, n);
@@ -696,7 +698,7 @@ const SpotifyMusic = (() => {
   }
 
   function initPlayer() {
-    if (!window.Spotify || !window.Spotify.Player) { window.onSpotifyWebPlaybackSDKReady = initPlayer; return; }
+    if (!(window.Spotify && window.Spotify.Player)) { pendingPlayerInit = true; return; }  // ה-SDK עוד לא נטען – ננסה כשיהיה מוכן
     player = new window.Spotify.Player({ name: "zadok80", getOAuthToken: (cb) => cb(token), volume: 0.5 });
     player.addListener("ready", ({ device_id }) => {
       deviceId = device_id; deviceReady = true;
@@ -1112,7 +1114,13 @@ const Host = (() => {
 
   // חיפוש שיר – Spotify אם מחובר (שירים מלאים), אחרת קטלוג ציבורי (קטעי 30 שנ')
   const addedSet = new Set();
-  const openSearch = () => { $("#music-modal").hidden = false; $("#music-search-input").focus(); };
+  const openSearch = () => {
+    $("#music-modal").hidden = false;
+    $("#music-results").innerHTML = SpotifyMusic.isConnected()
+      ? `<p class="music-hint">🎧 מחובר ל-Spotify — החיפוש יביא שירים מלאים</p>`
+      : `<p class="music-hint">🔈 קטעי 30 שניות — חברו Spotify (בלובי) לשירים מלאים</p>`;
+    $("#music-search-input").focus();
+  };
   const closeSearch = () => { $("#music-modal").hidden = true; };
 
   function resultRow(art, title, artist, key, onAdd) {
