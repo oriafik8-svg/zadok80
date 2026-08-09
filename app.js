@@ -54,14 +54,36 @@ const myTag = Math.random().toString(36).slice(2) + Date.now().toString(36); // 
 
 let currentUser = null;      // אובייקט המשתמש המחובר
 let pendingAction = null;    // פעולה להרצה אחרי התחברות
+let myAvatar = null;         // מזהה האווטאר הנבחר בפרופיל
 
-const NAV_SCREENS = ["screen-home", "screen-profile"];
+const AVATAR_IDS = ["a1", "a2", "a3", "a4"];
+const avatarDisplay = () => "✕";   // placeholder – יוחלף בגרפיקות מאוירות כשיישלחו תמונות
+
+function renderAvatarChoices() {
+  const box = $("#avatar-choices"); if (!box) return;
+  box.innerHTML = "";
+  AVATAR_IDS.forEach((id) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "avatar-choice" + (myAvatar === id ? " selected" : "");
+    b.textContent = avatarDisplay(id);
+    b.addEventListener("click", () => {
+      myAvatar = id;
+      if (currentUser) update(ref(db, "users/" + currentUser.uid + "/profile"), { gameAvatar: id });
+      renderAvatarChoices();
+      toast("האווטאר נבחר ✓");
+    });
+    box.appendChild(b);
+  });
+}
+
+const NAV_SCREENS = ["screen-home", "screen-profile", "screen-apps"];
 
 function showScreen(id) {
   $$(".screen").forEach(s => s.classList.remove("active"));
   $("#" + id).classList.add("active");
   document.body.classList.toggle("nav-visible", NAV_SCREENS.includes(id));
-  const map = { "screen-home": "home", "screen-profile": "profile" };
+  const map = { "screen-home": "home", "screen-profile": "profile", "screen-apps": "apps" };
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.nav === map[id]));
   window.scrollTo(0, 0);
 }
@@ -162,11 +184,13 @@ const Auth = (() => {
       currentUser = user;
       renderProfile();
       if (user) {
-        // שמירת/עדכון פרופיל בסיסי
-        set(ref(db, "users/" + user.uid + "/profile"), {
+        // עדכון (ולא דריסה) של הפרופיל – שומר על gameAvatar
+        update(ref(db, "users/" + user.uid + "/profile"), {
           name: user.displayName || (user.email || "אורח").split("@")[0],
           photo: user.photoURL || ""
         });
+        // טעינת האווטאר הנבחר
+        onValue(ref(db, "users/" + user.uid + "/profile/gameAvatar"), (s) => { myAvatar = s.val() || null; renderAvatarChoices(); });
         MyGames.load();
         if (pendingAction) { const a = pendingAction; pendingAction = null; a(); }
       }
@@ -222,7 +246,8 @@ const Auth = (() => {
   function profile() {
     return {
       name: currentUser ? (currentUser.displayName || (currentUser.email || "משתמש").split("@")[0]) : "אורח",
-      photo: currentUser ? (currentUser.photoURL || "") : ""
+      photo: currentUser ? (currentUser.photoURL || "") : "",
+      gameAvatar: myAvatar
     };
   }
 
@@ -498,13 +523,21 @@ const Editor = (() => {
       </div>`;
     block.innerHTML = `
       <div class="q-block-head">
+        <button type="button" class="q-move q-up" title="הזז למעלה">▲</button>
+        <button type="button" class="q-move q-down" title="הזז למטה">▼</button>
         <span class="q-index"></span>
         <span class="q-type-badge">${badge}</span>
+        <span class="q-head-spacer"></span>
         <button type="button" class="q-tab-btn" title="השלם דוגמה (TAB)">TAB</button>
         <button type="button" class="q-remove" title="מחק">🗑️</button>
       </div>
       <div class="q-text editable" contenteditable="true" data-ph="${phQ}"></div>
       ${settingsHtml}
+      <div class="q-image-row">
+        <button type="button" class="q-img-btn">🖼️ הוסף תמונה</button>
+        <input type="file" class="q-img-file" accept="image/*" hidden />
+        <div class="q-img-preview" hidden><img alt="" /><button type="button" class="q-img-remove" title="הסר">✕</button></div>
+      </div>
       ${answersHtml}`;
     wrap.appendChild(block);
 
@@ -518,6 +551,7 @@ const Editor = (() => {
       }
       const mSel = block.querySelector(".q-mult"); if (mSel && data.mult) mSel.value = String(data.mult);
       const tIn = block.querySelector(".q-time"); if (tIn && data.time) tIn.value = data.time;
+      if (data.image) setBlockImage(block, data.image);
     } else if (type === "tf") {
       const aT = block.querySelectorAll(".a-text");
       aT[0].textContent = "אמת"; aT[1].textContent = "שקר";
@@ -544,7 +578,66 @@ const Editor = (() => {
       btn.closest(".q-answer").classList.add("is-correct"); validate(); scheduleAutosave();
     }));
     block.querySelector(".q-remove").addEventListener("click", () => { block.remove(); renumber(); validate(); scheduleAutosave(); });
+
+    // הזזת שאלה למעלה/למטה
+    block.querySelector(".q-up").addEventListener("click", () => {
+      const prev = block.previousElementSibling;
+      if (prev) { wrap.insertBefore(block, prev); renumber(); scheduleAutosave(); }
+    });
+    block.querySelector(".q-down").addEventListener("click", () => {
+      const next = block.nextElementSibling;
+      if (next) { wrap.insertBefore(next, block); renumber(); scheduleAutosave(); }
+    });
+
+    // הוספת תמונה
+    const imgBtn = block.querySelector(".q-img-btn");
+    const imgFile = block.querySelector(".q-img-file");
+    imgBtn.addEventListener("click", () => imgFile.click());
+    imgFile.addEventListener("change", async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const dataUri = await resizeImage(f, 600, 0.6);
+      setBlockImage(block, dataUri);
+      e.target.value = "";
+      scheduleAutosave();
+    });
+    block.querySelector(".q-img-remove").addEventListener("click", () => { clearBlockImage(block); scheduleAutosave(); });
+
     renumber();
+  }
+
+  function setBlockImage(block, dataUri) {
+    const prev = block.querySelector(".q-img-preview");
+    prev.querySelector("img").src = dataUri;
+    prev.hidden = false;
+    block.querySelector(".q-img-btn").textContent = "🖼️ החלף תמונה";
+  }
+  function clearBlockImage(block) {
+    const prev = block.querySelector(".q-img-preview");
+    prev.querySelector("img").src = "";
+    prev.hidden = true;
+    block.querySelector(".q-img-btn").textContent = "🖼️ הוסף תמונה";
+  }
+  const blockImage = (block) => {
+    const img = block.querySelector(".q-img-preview img");
+    return img && img.src && img.src.startsWith("data:") ? img.src : null;
+  };
+
+  // הקטנת תמונה לפני שמירה (כדי לא לנפח את הבסיס נתונים)
+  function resizeImage(file, maxSize, quality) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const scale = Math.min(1, maxSize / Math.max(w, h));
+        w = Math.round(w * scale); h = Math.round(h * scale);
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => resolve(null);
+      img.src = URL.createObjectURL(file);
+    });
   }
 
   function fillExample(el) {
@@ -552,8 +645,15 @@ const Editor = (() => {
     refreshPh(el); validate();
   }
   const refreshPh = (el) => el.classList.toggle("empty", el.textContent.trim() === "");
-  const renumber = () => wrap.querySelectorAll(".q-block").forEach((b, i) =>
-    b.querySelector(".q-index").textContent = "שאלה " + (i + 1));
+  const renumber = () => {
+    const blocks = wrap.querySelectorAll(".q-block");
+    blocks.forEach((b, i) => {
+      b.querySelector(".q-index").textContent = "שאלה " + (i + 1);
+      const up = b.querySelector(".q-up"), down = b.querySelector(".q-down");
+      if (up) up.disabled = i === 0;
+      if (down) down.disabled = i === blocks.length - 1;
+    });
+  };
 
   function collect() {
     const out = [];
@@ -561,14 +661,15 @@ const Editor = (() => {
       const qT = b.querySelector(".q-text");
       if (qT.textContent.trim() === "") return;
       const mult = Number((b.querySelector(".q-mult") || {}).value) || 1;
-      if (b.dataset.type === "open") { out.push({ text: qT.innerHTML.trim(), type: "open", mult }); return; }
+      const image = blockImage(b);
+      if (b.dataset.type === "open") { out.push({ text: qT.innerHTML.trim(), type: "open", mult, image: image || null }); return; }
       const rows = b.querySelectorAll(".q-answer"); const answers = []; let ok = true;
       rows.forEach(r => { const t = r.querySelector(".a-text");
         if (t.textContent.trim() === "") ok = false; answers.push(t.innerHTML.trim()); });
       const correct = b.querySelector(".q-answer.is-correct");
       if (!ok || !correct) return;
       const time = Math.max(5, Math.min(120, Number((b.querySelector(".q-time") || {}).value) || 20));
-      out.push({ text: qT.innerHTML.trim(), answers, correct: Number(correct.dataset.idx), type: b.dataset.type, mult, time });
+      out.push({ text: qT.innerHTML.trim(), answers, correct: Number(correct.dataset.idx), type: b.dataset.type, mult, time, image: image || null });
     });
     return out;
   }
@@ -608,17 +709,18 @@ const Editor = (() => {
       const type = b.dataset.type;
       const mult = Number((b.querySelector(".q-mult") || {}).value) || 1;
       const qHtml = qT.innerHTML.trim();
+      const image = blockImage(b);
       if (type === "open") {
-        if (qT.textContent.trim() === "") return;           // בלוק פתוח ריק לגמרי – מדלגים
-        out.push({ text: qHtml, type: "open", mult });
+        if (qT.textContent.trim() === "" && !image) return;  // בלוק פתוח ריק לגמרי – מדלגים
+        out.push({ text: qHtml, type: "open", mult, image: image || null });
         return;
       }
       const answers = [...b.querySelectorAll(".q-answer .a-text")].map(t => t.innerHTML.trim());
-      const allEmpty = qT.textContent.trim() === "" && answers.every(a => a === "");
+      const allEmpty = qT.textContent.trim() === "" && answers.every(a => a === "") && !image;
       if (allEmpty) return;                                  // בלוק ריק לגמרי – מדלגים
       const correctEl = b.querySelector(".q-answer.is-correct");
       const time = Math.max(5, Math.min(120, Number((b.querySelector(".q-time") || {}).value) || 20));
-      out.push({ text: qHtml, answers, correct: correctEl ? Number(correctEl.dataset.idx) : null, type, mult, time });
+      out.push({ text: qHtml, answers, correct: correctEl ? Number(correctEl.dataset.idx) : null, type, mult, time, image: image || null });
     });
     return out;
   }
@@ -925,6 +1027,8 @@ const Host = (() => {
     const hmb = $("#host-mult-badge"); hmb.textContent = multTag(curMult); hmb.hidden = curMult <= 1;
     $("#host-qnum").textContent = i + 1;
     $("#host-question-text").innerHTML = q.text;
+    const himg = $("#host-q-image");
+    if (q.image) { himg.src = q.image; himg.hidden = false; } else { himg.hidden = true; himg.removeAttribute("src"); }
     $("#host-answered").textContent = "0";
     const grid = $("#host-answers"); grid.innerHTML = "";
     const revealBtn = $("#btn-reveal");
@@ -1025,6 +1129,8 @@ const Host = (() => {
     await update(gameRef, updates);
 
     $("#reveal-question-text").innerHTML = q.text;
+    const rimg = $("#reveal-q-image");
+    if (q.image) { rimg.src = q.image; rimg.hidden = false; } else { rimg.hidden = true; rimg.removeAttribute("src"); }
     const bw = $("#reveal-bars"); bw.innerHTML = "";
     const mx = Math.max(1, ...counts);
     q.answers.forEach((txt, k) => {
@@ -1081,17 +1187,33 @@ const Host = (() => {
       const col = $("#podium-" + place);
       if (!p) { col.style.visibility = "hidden"; return; }
       col.style.visibility = "visible";
+      col.dataset.score = p.score;
       col.innerHTML = `<div class="p-place">${place === "1" ? "🥇" : place === "2" ? "🥈" : "🥉"}</div>
-        ${avatarHTML(p, "p-photo")}<div class="p-name">${esc(p.name)}</div><div class="p-score">${p.score} נק'</div>`;
+        ${avatarHTML(p, "p-photo")}<div class="p-name">${esc(p.name)}</div>
+        <div class="p-score"><span class="ps-num">0</span> נק'</div>`;
     };
     fill("3", sorted[2]); fill("2", sorted[1]); fill("1", sorted[0]);
 
+    // ספירה עולה של הניקוד – "עף" מתוך המלבן
+    const countUp = (col, dur) => {
+      const el = col.querySelector(".ps-num"); if (!el) return;
+      const target = Number(col.dataset.score) || 0;
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / dur);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3)));
+        if (t < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
+    const revealCol = (place, dur) => { const c = $("#podium-" + place); c.classList.add("show"); countUp(c, dur); };
+
     // חשיפה דרמטית: 3 → 2 → 1
-    setTimeout(() => $("#podium-3").classList.add("show"), 500);
-    setTimeout(() => $("#podium-2").classList.add("show"), 1600);
+    setTimeout(() => revealCol("3", 900), 500);
+    setTimeout(() => revealCol("2", 900), 1600);
     setTimeout(() => {
       end.classList.add("spotlight");
-      const c1 = $("#podium-1"); c1.classList.add("show", "winner-glow");
+      const c1 = $("#podium-1"); c1.classList.add("show", "winner-glow"); countUp(c1, 1300);
       confetti.burst(260);
     }, 2900);
   }
@@ -1247,7 +1369,10 @@ const Player = (() => {
 
     const pRef = push(ref(db, "games/" + pin + "/players"));
     pid = pRef.key;
-    await set(pRef, { name, photo: prof.photo || "", avatar: name[0] || "?", score: 0, connected: true });
+    // אם נבחר אווטאר בפרופיל – משתמשים בו כתמונת השחקן
+    const av = prof.gameAvatar ? avatarDisplay(prof.gameAvatar) : (name[0] || "?");
+    const ph = prof.gameAvatar ? "" : (prof.photo || "");
+    await set(pRef, { name, photo: ph, avatar: av, score: 0, connected: true });
     onDisconnect(ref(db, "games/" + pin + "/players/" + pid + "/connected")).set(false);
     localStorage.setItem(pKey(), pid);
 
@@ -1393,6 +1518,7 @@ const Player = (() => {
    ניווט + טעינה ראשונית
    ========================================================================== */
 $$(".grandpa-photo").forEach(img => img.src = GRANDPA_PHOTO);
+renderAvatarChoices();
 $("#profile-photo") && ($("#profile-photo").src = GRANDPA_PHOTO);
 
 // תפריט עליון
@@ -1400,6 +1526,7 @@ $$(".nav-btn").forEach(btn => btn.addEventListener("click", () => {
   const nav = btn.dataset.nav;
   if (nav === "home") transitionTo("screen-home", "מסך הבית");
   else if (nav === "profile") transitionTo("screen-profile", "פרופיל");
+  else if (nav === "apps") transitionTo("screen-apps", "האפליקציות שלי");
   else if (nav === "create") requireAuth(() => goToMyGames());
   else if (nav === "join") requireAuth(() => { Player.prefill(); transitionTo("screen-player", "מצטרפים..."); });
 }));

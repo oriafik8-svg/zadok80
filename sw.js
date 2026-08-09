@@ -1,8 +1,8 @@
 /* Service Worker – zadok80 PWA
    אסטרטגיה: network-first (כדי שעדכונים יופיעו מיד), עם נפילה ל-cache במצב לא מקוון */
-const CACHE = "zadok80-v13";
+const CACHE = "zadok80-v15";
 const ASSETS = [
-  "./", "./index.html", "./style.css", "./app.js?v=13", "./callback.html",
+  "./", "./index.html", "./style.css", "./app.js?v=15", "./callback.html",
   "./manifest.json", "./icon-192.png", "./icon-512.png"
 ];
 

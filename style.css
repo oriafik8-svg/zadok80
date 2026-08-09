@@ -32,6 +32,17 @@ body {
   overflow-x: hidden;
 }
 
+/* ---- גרפיקות רקע ---- */
+#bg-graphics { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.bg-ico { position: absolute; width: 120px; height: 120px; opacity: .13; animation: bg-float 9s ease-in-out infinite; }
+.ico-house    { top: 8%;  left: 6%;  width: 130px; }
+.ico-factory  { bottom: 6%; right: 5%; width: 170px; animation-delay: 1.5s; }
+.ico-pot      { top: 14%; right: 8%;  width: 110px; animation-delay: .8s; }
+.ico-tray     { bottom: 12%; left: 7%; width: 150px; animation-delay: 2.2s; }
+.ico-pergola  { top: 46%; left: 44%;  width: 160px; opacity: .08; animation-delay: 3s; }
+@keyframes bg-float { 0%,100%{ transform: translateY(0) rotate(-2deg);} 50%{ transform: translateY(-16px) rotate(2deg);} }
+@media (max-width: 640px) { .bg-ico { width: 90px !important; opacity: .1; } .ico-pergola { display: none; } }
+
 /* ---- קונפטי canvas ---- */
 #confetti-canvas {
   position: fixed;
@@ -211,7 +222,9 @@ body {
   display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow);
 }
+.question-board { flex-direction: column; gap: 12px; }
 .question-board h2 { font-size: clamp(22px, 4vw, 38px); font-weight: 800; }
+.q-image { max-width: 100%; max-height: 34vh; border-radius: 12px; object-fit: contain; box-shadow: 0 3px 10px rgba(0,0,0,.25); }
 .confetti-frame {
   position: relative;
   border: 6px dashed transparent;
@@ -587,6 +600,16 @@ body.nav-visible #app { padding-top: 60px; }
   border: 2px solid var(--gold); background: rgba(255,210,63,.2); color: var(--white);
   font-weight: 800; font-size: 13px; border-radius: 8px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
 }
+.q-move { border: none; background: rgba(0,0,0,.25); color: #fff; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+.q-move:disabled { opacity: .3; cursor: default; }
+.q-head-spacer { flex: 1; }
+
+/* הוספת תמונה לשאלה בעורך */
+.q-image-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.q-img-btn { border: 2px dashed rgba(255,255,255,.5); background: rgba(255,255,255,.1); color: #fff; font-weight: 700; font-size: 14px; border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.q-img-preview { display: flex; align-items: center; gap: 8px; }
+.q-img-preview img { height: 54px; border-radius: 8px; object-fit: cover; }
+.q-img-remove { border: none; background: var(--red); color: #fff; width: 28px; height: 28px; border-radius: 8px; cursor: pointer; }
 .q-type-badge { font-size: 13px; font-weight: 800; color: var(--gold); }
 
 /* ---- לובי: זמן הצבעה + כרטיסי שחקנים ---- */
@@ -719,6 +742,47 @@ body.nav-visible #app { padding-top: 60px; }
   position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 10px;
   background: rgba(45,14,95,.45); backdrop-filter: blur(12px); animation: fade-in .2s ease;
+}
+
+/* ---- עמוד האפליקציות שלי ---- */
+#screen-apps { flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; }
+.apps-wrap { width: 100%; max-width: 620px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.apps-grid { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.app-card {
+  background: rgba(255,255,255,.14); border: 2px solid rgba(255,255,255,.3); border-radius: 18px;
+  padding: 22px 14px; text-decoration: none; color: #fff; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; transition: transform .12s ease;
+}
+.app-card:active { transform: translateY(3px); }
+.app-card.current { border-color: var(--gold); }
+.app-card .app-emoji { font-size: 44px; }
+.app-card .app-name { font-size: 20px; font-weight: 900; }
+.app-card .app-sub { font-size: 13px; opacity: .85; }
+@media (max-width: 460px) { .apps-grid { grid-template-columns: 1fr; } }
+
+/* ---- אווטאר בפרופיל (placeholder) ---- */
+.avatar-section { width: 100%; background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.22); border-radius: 18px; padding: 16px; text-align: center; }
+.avatar-choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
+.avatar-choice {
+  width: 64px; height: 64px; border-radius: 50%; cursor: pointer; border: 4px solid rgba(255,255,255,.4);
+  display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 900; color: #fff;
+  background: var(--purple); transition: transform .12s ease, border-color .15s;
+}
+.avatar-choice:nth-child(1){ background: var(--red);} .avatar-choice:nth-child(2){ background: var(--blue);}
+.avatar-choice:nth-child(3){ background: var(--green);} .avatar-choice:nth-child(4){ background: var(--orange);}
+.avatar-choice.selected { border-color: var(--gold); transform: scale(1.12); box-shadow: 0 0 16px var(--gold); }
+
+/* ---- אנימציית ניקוד בפודיום ---- */
+.podium-col .p-score {
+  display: inline-block; background: var(--white); color: var(--red); padding: 2px 12px; border-radius: 30px;
+  box-shadow: 0 4px 0 rgba(0,0,0,.2);
+}
+.podium-col.show .p-score { animation: score-pop 1s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes score-pop {
+  0%   { transform: translateY(0) scale(.4); opacity: 0; }
+  40%  { transform: translateY(-42px) scale(1.35); opacity: 1; }
+  70%  { transform: translateY(-30px) scale(1.1); }
+  100% { transform: translateY(-24px) scale(1); }
 }
 
 /* ---- אווטאר-אות כשאין תמונת פרופיל ---- */

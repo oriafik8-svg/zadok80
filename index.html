@@ -20,6 +20,20 @@
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
+  <!-- גרפיקות רקע חגיגיות (מגש, מפעל, סירים, פרגולה, בית) -->
+  <div id="bg-graphics" aria-hidden="true">
+    <!-- בית -->
+    <svg class="bg-ico ico-house" viewBox="0 0 100 100"><path d="M50 15 L88 45 H78 V85 H58 V60 H42 V85 H22 V45 H12 Z" fill="#ffd23f"/><rect x="60" y="50" width="12" height="12" fill="#8b2fc9"/></svg>
+    <!-- מפעל -->
+    <svg class="bg-ico ico-factory" viewBox="0 0 120 100"><rect x="14" y="20" width="10" height="30" fill="#ff8c00"/><rect x="28" y="14" width="10" height="36" fill="#ff8c00"/><path d="M10 50 H110 V88 H10 Z" fill="#ffd23f"/><path d="M46 50 L46 65 L66 50 L66 65 L86 50 L86 65 L106 50" fill="none" stroke="#ff8c00" stroke-width="6"/><rect x="24" y="70" width="10" height="14" fill="#8b2fc9"/><rect x="52" y="70" width="10" height="14" fill="#8b2fc9"/><rect x="80" y="70" width="10" height="14" fill="#8b2fc9"/></svg>
+    <!-- סיר -->
+    <svg class="bg-ico ico-pot" viewBox="0 0 100 100"><rect x="20" y="40" width="60" height="42" rx="6" fill="#e21b3c"/><rect x="16" y="34" width="68" height="10" rx="5" fill="#ffd23f"/><rect x="6" y="36" width="12" height="6" rx="3" fill="#ffd23f"/><rect x="82" y="36" width="12" height="6" rx="3" fill="#ffd23f"/><path d="M40 24 q4 -8 0 -14 M52 24 q4 -8 0 -14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+    <!-- מגש כתום -->
+    <svg class="bg-ico ico-tray" viewBox="0 0 120 80"><ellipse cx="60" cy="42" rx="52" ry="26" fill="#ff8c00"/><ellipse cx="60" cy="38" rx="44" ry="20" fill="#ffab40"/><circle cx="46" cy="38" r="6" fill="#e21b3c"/><circle cx="62" cy="34" r="6" fill="#26890c"/><circle cx="74" cy="40" r="6" fill="#ffd23f"/></svg>
+    <!-- פרגולה -->
+    <svg class="bg-ico ico-pergola" viewBox="0 0 120 100"><rect x="18" y="30" width="8" height="60" fill="#ff8c00"/><rect x="94" y="30" width="8" height="60" fill="#ff8c00"/><rect x="10" y="24" width="100" height="8" fill="#ffd23f"/><rect x="28" y="16" width="6" height="16" fill="#ffd23f"/><rect x="46" y="16" width="6" height="16" fill="#ffd23f"/><rect x="64" y="16" width="6" height="16" fill="#ffd23f"/><rect x="82" y="16" width="6" height="16" fill="#ffd23f"/><path d="M20 30 q40 20 80 0" fill="none" stroke="#26890c" stroke-width="5"/></svg>
+  </div>
+
   <canvas id="confetti-canvas"></canvas>
 
   <!-- ================= אוברליי מעבר עם ספינר סבא ================= -->
@@ -33,9 +47,10 @@
 
   <!-- ================= תפריט ניווט עליון ================= -->
   <nav id="topnav" class="topnav">
-    <button class="nav-btn" data-nav="home">מסך הבית</button>
+    <button class="nav-btn" data-nav="home">בית</button>
     <button class="nav-btn" data-nav="create">ליצור</button>
     <button class="nav-btn" data-nav="join">להצטרף</button>
+    <button class="nav-btn" data-nav="apps">אפליקציות</button>
     <button class="nav-btn" data-nav="profile">פרופיל</button>
   </nav>
 
@@ -93,12 +108,40 @@
           <button id="btn-logout" class="cta-btn small ghost">התנתקות</button>
         </div>
 
+        <div class="avatar-section">
+          <div class="avatar-label">🎨 האווטאר שלי (יופיע במשחקים):</div>
+          <div id="avatar-choices" class="avatar-choices"></div>
+          <p class="editor-hint">אווטארים מאוירים בקרוב — בינתיים מציין מקום</p>
+        </div>
+
         <div class="mygames-head">
           <h2 class="reveal-title">🎮 המשחקים שלי</h2>
           <button id="btn-new-game" class="cta-btn small">➕ משחק חדש</button>
         </div>
         <ul id="mygames-list" class="mygames-list"></ul>
         <p id="mygames-empty" class="editor-hint">עדיין אין משחקים – צרו חדש עם הכפתור למעלה 👆</p>
+      </div>
+    </section>
+
+    <!-- ========================= מסך האפליקציות שלי ========================= -->
+    <section id="screen-apps" class="screen">
+      <div class="apps-wrap">
+        <div class="big-80 small" aria-hidden="true">80</div>
+        <h2 class="host-heading">🎮 האפליקציות שלי</h2>
+        <p class="home-sub">כל הקישורים במקום אחד</p>
+        <div class="apps-grid">
+          <a class="app-card" href="https://oriafik8-svg.github.io/imposter/" target="_blank" rel="noopener">
+            <div class="app-emoji">🕵️</div>
+            <div class="app-name">Imposter</div>
+            <div class="app-sub">משחק המתחזה</div>
+          </a>
+          <a class="app-card current" href="./">
+            <div class="app-emoji">🎂</div>
+            <div class="app-name">zadok80</div>
+            <div class="app-sub">קהוט לסבא (כאן)</div>
+          </a>
+        </div>
+        <p class="editor-hint">אפשר להוסיף עוד קישורים בהמשך</p>
       </div>
     </section>
 
@@ -192,6 +235,7 @@
           <div class="answered-count">הצביעו: <span id="host-answered">0</span>/<span id="host-players-total">0</span></div>
         </div>
         <div class="question-board confetti-frame">
+          <img id="host-q-image" class="q-image" alt="" hidden />
           <h2 id="host-question-text">השאלה תופיע כאן</h2>
         </div>
         <div class="answers-grid" id="host-answers"></div>
@@ -201,7 +245,10 @@
       <!-- חשיפה + גרף -->
       <div id="host-reveal" class="host-view" hidden>
         <h2 class="reveal-title">התשובה הנכונה 🎯</h2>
-        <div class="question-board confetti-frame"><h2 id="reveal-question-text"></h2></div>
+        <div class="question-board confetti-frame">
+          <img id="reveal-q-image" class="q-image" alt="" hidden />
+          <h2 id="reveal-question-text"></h2>
+        </div>
         <div class="answers-bars" id="reveal-bars"></div>
         <button id="btn-show-leaderboard" class="cta-btn small">🏆 ניקוד</button>
       </div>
@@ -380,6 +427,6 @@
     <p class="countdown-text">ממשיכים...</p>
   </div>
 
-  <script type="module" src="app.js?v=13"></script>
+  <script type="module" src="app.js?v=15"></script>
 </body>
 </html>
