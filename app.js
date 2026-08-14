@@ -78,6 +78,21 @@ const AVATARS = [
 ];
 const avatarSrc = (id) => { const a = AVATARS.find(x => x.id === id); return a ? a.src : null; };
 
+/* מצייני מקום לסמל הפרופיל: ✕ לאורח, מעטפה למשתמש אימייל */
+const PH_X = "data:image/svg+xml," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='#46178f'/><path d='M33 33 L67 67 M67 33 L33 67' stroke='#fff' stroke-width='11' stroke-linecap='round'/></svg>");
+const PH_MAIL = "data:image/svg+xml," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='#1368ce'/><rect x='22' y='34' width='56' height='36' rx='5' fill='none' stroke='#fff' stroke-width='6'/><path d='M24 39 L50 57 L76 39' fill='none' stroke='#fff' stroke-width='6'/></svg>");
+
+/* מעדכן את סמל הפרופיל: אווטאר נבחר > תמונת Google > מעטפה/✕ */
+function refreshProfilePhoto() {
+  const el = $("#profile-photo"); if (!el || !currentUser) return;
+  if (myAvatar && avatarSrc(myAvatar)) el.src = avatarSrc(myAvatar);
+  else if (currentUser.isAnonymous) el.src = PH_X;
+  else if (currentUser.photoURL) el.src = currentUser.photoURL;
+  else el.src = PH_MAIL;
+}
+
 function renderAvatarChoices() {
   const box = $("#avatar-choices"); if (!box) return;
   box.innerHTML = "";
@@ -90,6 +105,7 @@ function renderAvatarChoices() {
       myAvatar = id;
       if (currentUser) update(ref(db, "users/" + currentUser.uid + "/profile"), { gameAvatar: id });
       renderAvatarChoices();
+      refreshProfilePhoto();
       toast("האווטאר נבחר ✓");
     });
     box.appendChild(b);
@@ -218,7 +234,7 @@ const Auth = (() => {
           photo: user.isAnonymous ? "" : (user.photoURL || "")
         });
         // טעינת האווטאר הנבחר
-        onValue(ref(db, "users/" + user.uid + "/profile/gameAvatar"), (s) => { myAvatar = s.val() || null; renderAvatarChoices(); });
+        onValue(ref(db, "users/" + user.uid + "/profile/gameAvatar"), (s) => { myAvatar = s.val() || null; renderAvatarChoices(); refreshProfilePhoto(); });
         MyGames.load();
         if (pendingAction) { const a = pendingAction; pendingAction = null; a(); }
       }
@@ -233,7 +249,7 @@ const Auth = (() => {
     $("#profile-account").hidden = !inn;
     if (inn) {
       $("#profile-name").textContent = dispName(currentUser);
-      $("#profile-photo").src = (myAvatar && avatarSrc(myAvatar)) || (currentUser.isAnonymous ? GRANDPA_PHOTO : (currentUser.photoURL || GRANDPA_PHOTO));
+      refreshProfilePhoto();
     }
   }
 
