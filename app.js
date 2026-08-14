@@ -10,7 +10,7 @@ import {
 import {
   getAuth, onAuthStateChanged, signOut,
   GoogleAuthProvider, signInWithPopup,
-  signInWithEmailAndPassword, createUserWithEmailAndPassword
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 /* ============================================================
@@ -122,7 +122,15 @@ function transitionTo(id, text = "טוען...", after = null) {
 }
 
 /* HTML של אווטאר: תמונת פרופיל אם קיימת, אחרת אות בעיגול */
+function memberImg(m) {
+  const src = (m && m.avatarId && avatarSrc(m.avatarId)) || (m && m.photo);
+  return src ? `<img src="${src}" alt="">` : `<span class="ava-letter">${esc(((m && m.name) || "?")[0])}</span>`;
+}
 function avatarHTML(p, cls) {
+  if (p && p.members) {   // פרופיל משולב – עיגולים חופפים
+    const ms = Object.values(p.members).slice(0, 2);
+    return `<span class="${cls} ava-combined">${ms.map((m, i) => `<span class="ava-part p${i}">${memberImg(m)}</span>`).join("")}</span>`;
+  }
   const src = (p && p.avatarId && avatarSrc(p.avatarId)) || (p && p.photo);
   if (src) return `<img class="${cls}" src="${src}" alt="">`;
   const letter = (p && (p.avatar || (p.name || "?")[0])) || "?";
@@ -206,8 +214,8 @@ const Auth = (() => {
       if (user) {
         // עדכון (ולא דריסה) של הפרופיל – שומר על gameAvatar
         update(ref(db, "users/" + user.uid + "/profile"), {
-          name: user.displayName || (user.email || "אורח").split("@")[0],
-          photo: user.photoURL || ""
+          name: dispName(user),
+          photo: user.isAnonymous ? "" : (user.photoURL || "")
         });
         // טעינת האווטאר הנבחר
         onValue(ref(db, "users/" + user.uid + "/profile/gameAvatar"), (s) => { myAvatar = s.val() || null; renderAvatarChoices(); });
@@ -217,14 +225,22 @@ const Auth = (() => {
     });
   }
 
+  const dispName = (u) => u.isAnonymous ? "אורח" : (u.displayName || (u.email || "משתמש").split("@")[0]);
+
   function renderProfile() {
     const inn = !!currentUser;
     $("#profile-login").hidden = inn;
     $("#profile-account").hidden = !inn;
     if (inn) {
-      $("#profile-name").textContent = currentUser.displayName || (currentUser.email || "משתמש").split("@")[0];
-      $("#profile-photo").src = currentUser.photoURL || GRANDPA_PHOTO;
+      $("#profile-name").textContent = dispName(currentUser);
+      $("#profile-photo").src = (myAvatar && avatarSrc(myAvatar)) || (currentUser.isAnonymous ? GRANDPA_PHOTO : (currentUser.photoURL || GRANDPA_PHOTO));
     }
+  }
+
+  async function guest() {
+    try { await signInAnonymously(auth); }
+    catch (e) { showErr(mapErr(e).includes("operation-not-allowed") || (e.code || "").includes("operation-not-allowed")
+      ? "התחברות אורח לא מופעלת ב-Firebase. הפעילו Authentication → Sign-in method → Anonymous." : mapErr(e)); }
   }
 
   async function google() {
@@ -265,13 +281,14 @@ const Auth = (() => {
 
   function profile() {
     return {
-      name: currentUser ? (currentUser.displayName || (currentUser.email || "משתמש").split("@")[0]) : "אורח",
-      photo: currentUser ? (currentUser.photoURL || "") : "",
+      name: currentUser ? dispName(currentUser) : "אורח",
+      photo: currentUser && !currentUser.isAnonymous ? (currentUser.photoURL || "") : "",
       gameAvatar: myAvatar
     };
   }
 
   $("#btn-google").addEventListener("click", google);
+  $("#btn-guest").addEventListener("click", guest);
   $("#btn-email-signin").addEventListener("click", signIn);
   $("#btn-email-signup").addEventListener("click", signUp);
   $("#auth-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") signIn(); });
@@ -877,6 +894,7 @@ const Host = (() => {
   const multTag = (m) => (m > 1 ? "×" + m : "");
   let phase = "lobby";          // lobby | playing | paused | ended
   let pausedPid = null, pausedName = "", shareTitle = "";
+  let pairMode = false; const pairSel = new Set();   // מצב חיבור זוגות משתתפים
   let musicVol = 0.5, playlist = [], musicIdx = 0;
   const musicEl = new Audio();
   musicEl.volume = musicVol;
@@ -939,19 +957,8 @@ const Host = (() => {
 
     onValue(ref(db, "games/" + pin + "/players"), (snap) => {
       players = snap.val() || {};
+      renderLobby();
       const list = Object.entries(players);
-      $("#lobby-count").textContent = list.length;
-      const ul = $("#lobby-players"); ul.innerHTML = "";
-      list.forEach(([, p]) => {
-        const li = document.createElement("li");
-        li.innerHTML = `${avatarHTML(p, "pcard-photo")}<span>${esc(p.name)}</span>`;
-        ul.appendChild(li);
-      });
-      $("#host-players-total").textContent = list.length;
-      const enough = list.length >= 2;
-      $("#btn-start-game").disabled = !enough;
-      $("#lobby-hint").style.display = enough ? "none" : "block";
-
       // ניטור נוכחות במהלך המשחק
       if (phase === "playing") {
         const gone = list.find(([, p]) => p.connected === false);
@@ -962,6 +969,60 @@ const Host = (() => {
       }
     });
     addEventListener("beforeunload", () => { if (gameRef) remove(gameRef); });
+  }
+
+  function renderLobby() {
+    const list = Object.entries(players);
+    $("#lobby-count").textContent = list.length;
+    const ul = $("#lobby-players"); ul.innerHTML = "";
+    list.forEach(([id, p]) => {
+      const li = document.createElement("li");
+      li.innerHTML = `${avatarHTML(p, "pcard-photo")}<span>${esc(p.name)}</span>`;
+      if (pairMode) {
+        li.classList.add("selectable");
+        if (pairSel.has(id)) li.classList.add("sel");
+        li.addEventListener("click", () => {
+          if (pairSel.has(id)) pairSel.delete(id); else pairSel.add(id);
+          li.classList.toggle("sel");
+        });
+      }
+      ul.appendChild(li);
+    });
+    $("#host-players-total").textContent = list.length;
+    const enough = list.length >= 2;
+    $("#btn-start-game").disabled = !enough;
+    $("#lobby-hint").style.display = enough ? "none" : "block";
+  }
+
+  /* ---------- חיבור זוגות משתתפים ---------- */
+  function enterPairMode() {
+    pairMode = true; pairSel.clear();
+    $("#pair-actions").hidden = false; $("#pair-hint").hidden = false; $("#btn-pair-mode").hidden = true;
+    renderLobby();
+  }
+  function exitPairMode() {
+    pairMode = false; pairSel.clear();
+    $("#pair-actions").hidden = true; $("#pair-hint").hidden = true; $("#btn-pair-mode").hidden = false;
+    renderLobby();
+  }
+  async function mergePlayers() {
+    const pids = [...pairSel];
+    if (pids.length < 2) { toast("בחרו לפחות 2 שחקנים"); return; }
+    const members = [];
+    pids.forEach((id) => {
+      const p = players[id]; if (!p) return;
+      if (p.members) members.push(...Object.values(p.members));
+      else members.push({ name: p.name, avatarId: p.avatarId || null, photo: p.photo || "" });
+    });
+    const primary = pids[0];
+    const name = members.map((m) => m.name).join(" + ");
+    await update(ref(db, "games/" + pin + "/players/" + primary), { name, members });
+    for (const id of pids.slice(1)) {
+      await set(ref(db, "games/" + pin + "/merged/" + id), name);
+      await remove(ref(db, "games/" + pin + "/players/" + id));
+    }
+    exitPairMode();
+    toast("הפרופילים חוברו 👥");
   }
 
   /* ---------- יציאת שחקן / השהיה ---------- */
@@ -1318,6 +1379,9 @@ const Host = (() => {
   $("#music-search-input").addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
 
   $("#btn-copy-link").addEventListener("click", async () => { await copyText($("#join-link").value); toast("קישור ההצטרפות הועתק! 📋"); });
+  $("#btn-pair-mode").addEventListener("click", () => enterPairMode());
+  $("#btn-pair-cancel").addEventListener("click", () => exitPairMode());
+  $("#btn-pair-connect").addEventListener("click", () => mergePlayers());
   $("#btn-start-game").addEventListener("click", () => countdownThenQuestion(0));
   $("#btn-reveal").addEventListener("click", () => { if (curOpen) openRating(); else endQuestion(); });
   $("#btn-rating-done").addEventListener("click", () => applyOpenRating());
@@ -1342,6 +1406,30 @@ const Host = (() => {
    ========================================================================== */
 const Player = (() => {
   let pin = null, pid = null, lastQ = -1, answered = false, metaUnsub = null, cdTimer = null, scanner = null;
+  let selfUnsub = null, sawSelf = false, finished = false;
+
+  function attachSelf() {
+    if (selfUnsub) selfUnsub();
+    sawSelf = false;
+    selfUnsub = onValue(ref(db, "games/" + pin + "/players/" + pid), (s) => {
+      if (s.exists()) sawSelf = true;
+      else if (sawSelf && !finished) onSelfRemoved();
+    });
+  }
+  async function onSelfRemoved() {
+    if (metaUnsub) metaUnsub();
+    if (selfUnsub) selfUnsub();
+    const m = await get(ref(db, "games/" + pin + "/merged/" + pid));
+    if (m.exists()) {
+      $("#player-merged-title").textContent = "צורפת ל" + m.val();
+      $("#player-merged-text").textContent = "שחקו יחד באותו מכשיר 👥";
+    } else {
+      $("#player-merged-title").textContent = "הוצאת מהמשחק";
+      $("#player-merged-text").textContent = "המנחה הסיר אותך. אפשר לחזור למסך הבית.";
+    }
+    localStorage.removeItem(pKey());
+    showPlayerView("player-merged");
+  }
 
   function prefill() {
     const p = Auth.profile();
@@ -1380,7 +1468,7 @@ const Player = (() => {
         pid = stored; markPresence();
         $("#player-name-echo").textContent = ps.val().name || name;
         $("#player-avatar-big").src = ps.val().photo || prof.photo || GRANDPA_PHOTO;
-        attachMeta();
+        finished = false; attachMeta(); attachSelf();
         return;
       }
     }
@@ -1401,7 +1489,7 @@ const Player = (() => {
     $("#player-name-echo").textContent = name;
     $("#player-avatar-big").src = (prof.gameAvatar && avatarSrc(prof.gameAvatar)) || prof.photo || GRANDPA_PHOTO;
     showPlayerView("player-wait"); confetti.burst(60);
-    attachMeta();
+    finished = false; attachMeta(); attachSelf();
   }
 
   function onMeta(meta) {
@@ -1413,8 +1501,8 @@ const Player = (() => {
     else if (st === "leaderboard") { /* נשארים במסך התוצאה */ }
     else if (st === "paused") { $("#pl-paused-name").textContent = meta.pausedFor || "שחקן"; showPlayerView("player-paused"); }
     else if (st === "resume") { answered = false; resumeCountdown(() => {}); }
-    else if (st === "ended") showFinal();
-    else if (st === "aborted") showPlayerView("player-aborted");
+    else if (st === "ended") { finished = true; showFinal(); }
+    else if (st === "aborted") { finished = true; showPlayerView("player-aborted"); }
   }
 
   function runCountdown(meta) {
@@ -1507,7 +1595,7 @@ const Player = (() => {
 
   const err = (m) => { const e = $("#join-error"); e.textContent = m; e.hidden = false; };
 
-  function goHome() { if (metaUnsub) metaUnsub(); localStorage.removeItem(pKey()); showScreen("screen-home"); }
+  function goHome() { if (metaUnsub) metaUnsub(); if (selfUnsub) selfUnsub(); localStorage.removeItem(pKey()); showScreen("screen-home"); }
 
   /* ---------- סריקת QR ---------- */
   async function stopScan() {
@@ -1532,6 +1620,7 @@ const Player = (() => {
   $("#btn-open-submit").addEventListener("click", submitOpen);
   $("#btn-player-next").addEventListener("click", goHome);
   $("#btn-player-abort-home").addEventListener("click", goHome);
+  $("#btn-merged-home").addEventListener("click", goHome);
 
   return { prefill };
 })();

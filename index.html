@@ -98,6 +98,8 @@
           <p class="auth-note">נרשמתם קודם עם Google? התחברו דרך כפתור Google למעלה.</p>
           <p id="auth-error" class="join-error" hidden></p>
         </div>
+        <div class="or-sep">או</div>
+        <button id="btn-guest" class="cta-btn ghost">👤 התחבר כאורח</button>
       </div>
 
       <!-- מצב מחובר -->
@@ -214,6 +216,14 @@
         </div>
         <div class="players-lobby">
           <div class="players-count"><span id="lobby-count">0</span> שחקנים מחוברים</div>
+          <div class="pair-bar">
+            <button id="btn-pair-mode" class="cta-btn small ghost">👥 חבר משתתפים (זוגות)</button>
+            <span id="pair-actions" hidden>
+              <button id="btn-pair-connect" class="cta-btn small">🔗 חבר</button>
+              <button id="btn-pair-cancel" class="cta-btn small ghost">ביטול</button>
+            </span>
+          </div>
+          <p id="pair-hint" class="editor-hint" hidden>בחרו 2 שחקנים או יותר ולחצו "חבר"</p>
           <ul id="lobby-players" class="lobby-players cards"></ul>
         </div>
         <button id="btn-start-game" class="cta-btn" disabled>▶️ התחל משחק</button>
@@ -374,6 +384,14 @@
         <p class="player-wait-text">המשחק מושהה לרגע</p>
       </div>
 
+      <!-- צורף לשחקן אחר / הוצא -->
+      <div id="player-merged" class="player-view" hidden>
+        <div class="lock-emoji">🔗</div>
+        <h2 class="player-heading" id="player-merged-title">צורפת לשחקן אחר</h2>
+        <p class="player-wait-text" id="player-merged-text">שחקו יחד באותו מכשיר 👥</p>
+        <button id="btn-merged-home" class="cta-btn small ghost">✖️ מסך הבית</button>
+      </div>
+
       <!-- היוצר סיים את המשחק -->
       <div id="player-aborted" class="player-view" hidden>
         <div class="lock-emoji">🏁</div>
@@ -427,6 +445,6 @@
     <p class="countdown-text">ממשיכים...</p>
   </div>
 
-  <script type="module" src="app.js?v=17"></script>
+  <script type="module" src="app.js?v=18"></script>
 </body>
 </html>
