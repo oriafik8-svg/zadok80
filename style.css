@@ -795,6 +795,8 @@ body.nav-visible #app { padding-top: 60px; }
 .pair-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
 .lobby-players.cards li.selectable { cursor: pointer; }
 .lobby-players.cards li.sel { outline: 4px solid var(--gold); background: #fff7d6; }
+.lobby-players.cards li.avatar-pick { padding: 6px; }
+.lobby-players.cards li.avatar-pick .pcard-photo { width: 46px; height: 46px; }
 
 /* אווטאר משולב בסגנון יוטיוב – עיגולים חופפים */
 .ava-combined { position: relative; display: inline-block; background: none !important; overflow: visible; flex-shrink: 0; }

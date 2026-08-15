@@ -991,26 +991,33 @@ const Host = (() => {
     const list = Object.entries(players);
     $("#lobby-count").textContent = list.length;
     const ul = $("#lobby-players"); ul.innerHTML = "";
-    list.forEach(([id, p]) => {
-      const li = document.createElement("li");
-      li.innerHTML = `${avatarHTML(p, "pcard-photo")}<span>${esc(p.name)}</span>`;
-      if (pairMode) {
-        li.classList.add("selectable");
-        if (pairSel.has(id)) li.classList.add("sel");
+    if (pairMode) {
+      // בחירה מכל הפרופילים המוכנים (כל האווטארים)
+      AVATARS.forEach(({ id, src }) => {
+        const li = document.createElement("li");
+        li.className = "selectable avatar-pick" + (pairSel.has(id) ? " sel" : "");
+        li.innerHTML = `<img class="pcard-photo" src="${src}" alt="">`;
         li.addEventListener("click", () => {
           if (pairSel.has(id)) pairSel.delete(id); else pairSel.add(id);
           li.classList.toggle("sel");
         });
-      }
-      ul.appendChild(li);
-    });
+        ul.appendChild(li);
+      });
+    } else {
+      // רשימת המצטרפים בפועל
+      list.forEach(([, p]) => {
+        const li = document.createElement("li");
+        li.innerHTML = `${avatarHTML(p, "pcard-photo")}<span>${esc(p.name)}</span>`;
+        ul.appendChild(li);
+      });
+    }
     $("#host-players-total").textContent = list.length;
     const enough = list.length >= 2;
     $("#btn-start-game").disabled = !enough;
     $("#lobby-hint").style.display = enough ? "none" : "block";
   }
 
-  /* ---------- חיבור זוגות משתתפים ---------- */
+  /* ---------- חיבור זוגות פרופילים (לפי אווטאר) ---------- */
   function enterPairMode() {
     pairMode = true; pairSel.clear();
     $("#pair-actions").hidden = false; $("#pair-hint").hidden = false; $("#btn-pair-mode").hidden = true;
@@ -1022,21 +1029,17 @@ const Host = (() => {
     renderLobby();
   }
   async function mergePlayers() {
-    const pids = [...pairSel];
-    if (pids.length < 2) { toast("בחרו לפחות 2 שחקנים"); return; }
-    const members = [];
-    pids.forEach((id) => {
-      const p = players[id]; if (!p) return;
-      if (p.members) members.push(...Object.values(p.members));
-      else members.push({ name: p.name, avatarId: p.avatarId || null, photo: p.photo || "" });
+    const group = [...pairSel];            // מזהי אווטארים
+    if (group.length < 2) { toast("בחרו לפחות 2 פרופילים"); return; }
+    const snap = await get(ref(db, "games/" + pin + "/pairs"));
+    const pairs = snap.val() || [];
+    pairs.push(group);
+    await set(ref(db, "games/" + pin + "/pairs"), pairs);
+    // החלה על מי שכבר הצטרף עם אווטאר מהקבוצה
+    const members = group.map((aid) => ({ avatarId: aid }));
+    Object.entries(players).forEach(([id, p]) => {
+      if (p.avatarId && group.includes(p.avatarId)) update(ref(db, "games/" + pin + "/players/" + id), { members });
     });
-    const primary = pids[0];
-    const name = members.map((m) => m.name).join(" + ");
-    await update(ref(db, "games/" + pin + "/players/" + primary), { name, members });
-    for (const id of pids.slice(1)) {
-      await set(ref(db, "games/" + pin + "/merged/" + id), name);
-      await remove(ref(db, "games/" + pin + "/players/" + id));
-    }
     exitPairMode();
     toast("הפרופילים חוברו 👥");
   }
@@ -1501,6 +1504,14 @@ const Player = (() => {
     });
     onDisconnect(ref(db, "games/" + pin + "/players/" + pid + "/connected")).set(false);
     localStorage.setItem(pKey(), pid);
+
+    // אם האווטאר שנבחר מחובר לזוג – מציגים אווטאר משולב
+    if (prof.gameAvatar) {
+      const ps = await get(ref(db, "games/" + pin + "/pairs"));
+      const pairs = ps.val() || [];
+      const grp = pairs.find((g) => Object.values(g).includes(prof.gameAvatar));
+      if (grp) await update(ref(db, "games/" + pin + "/players/" + pid), { members: Object.values(grp).map((aid) => ({ avatarId: aid })) });
+    }
 
     $("#player-name-echo").textContent = name;
     $("#player-avatar-big").src = (prof.gameAvatar && avatarSrc(prof.gameAvatar)) || prof.photo || GRANDPA_PHOTO;
